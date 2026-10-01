@@ -1,0 +1,19 @@
+# dependencias
+node_modules/
+
+# variables de entorno — nunca secretos en el repo (ver sección 11 del CLAUDE.md)
+.env
+.env.*
+!.env.example
+
+# builds
+.next/
+dist/
+build/
+
+# sistema
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
