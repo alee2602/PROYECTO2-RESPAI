@@ -1,10 +1,14 @@
 # dependencias
 node_modules/
 
-# variables de entorno — nunca secretos en el repo (ver sección 11 del CLAUDE.md)
+# variables de entorno — nunca credenciales en el repo (ver sección 11 del CLAUDE.md)
 .env
 .env.*
 !.env.example
+
+# config de Firebase para la prueba estática de login (sin build tool, por eso
+# va en un archivo propio en vez de .env) — nunca el archivo real, solo el .example
+pruebas/ios-login/config.js
 
 # builds
 .next/

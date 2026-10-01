@@ -64,6 +64,8 @@ Estructura sugerida del repo:
 
 En una PWA instalada en iOS, `signInWithPopup` suele fallar y `signInWithRedirect` ha tenido problemas por el bloqueo de almacenamiento entre dominios de Safari. Además, la PWA instalada tiene almacenamiento separado de Safari (la sesión no se comparte). **Esto se prueba en un iPhone real en la Etapa 0**, antes de construir nada encima.
 
+**Actualización 2026-09-30 — probado, no se reprodujo el problema:** con una página de prueba desechable (`/pruebas/ios-login/`) desplegada en Vercel, tanto `signInWithPopup` como `signInWithRedirect` funcionaron dentro de la PWA instalada en un iPhone real, y la sesión persistió tras cerrar y reabrir la app por completo. Detalle y evidencia en `/docs/ciclos.md`. Falta repetir la prueba en Android antes de cerrar el checklist de Etapa 0.
+
 ## 6. Esquema de una noticia (borrador, es el contrato entre portal, feed y chat)
 
 Se cierra entre todos el primer día. Cualquier cambio posterior se avisa al equipo y se actualiza en `/packages/shared`.

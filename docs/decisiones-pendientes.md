@@ -5,7 +5,8 @@ Entrega: **2026-10-16**. Hoy: 2026-09-30.
 | Decisión | Estado | Notas |
 |---|---|---|
 | Confirmación por escrito del profesor sobre PWA | Pendiente | Dicho de palabra que vale; falta por escrito. No bloqueante para seguir construyendo. |
-| Stack definitivo (Next.js vs. otra opción; Firebase Hosting vs. Vercel; dónde corre el endpoint del chat) | Pendiente | El enunciado no exige ningún stack ("cada equipo decidirá su arquitectura"). Sección 5 del CLAUDE.md es una propuesta razonable, no una decisión tomada. |
+| Dónde corre el endpoint del chat / hosting | Resuelto (2026-09-30) | **Firebase solo para Auth + Firestore** (plan Spark, gratis, sin tarjeta). **Hosting del frontend y endpoint del chat en Vercel** (funciones serverless de Vercel sí pueden llamar APIs externas sin plan de pago). Se evita así el plan Blaze de Firebase, que exige tarjeta de crédito para llamadas salientes desde Cloud Functions. |
+| Stack definitivo (framework del frontend: Next.js vs. otra opción) | Pendiente | El enunciado no exige ningún framework ("cada equipo decidirá su arquitectura"). Sección 5 del CLAUDE.md propone Next.js/TypeScript, razonable dado que ya se decidió Vercel como hosting (Next.js es lo más directo ahí), pero falta confirmarlo con el equipo. |
 | Modelo y proveedor para el chat (el más barato que dé calidad aceptable) | Pendiente | Debe pasar por un endpoint de servidor con medidor de costo y tope, nunca una key en el cliente. |
 | Origen de imágenes (libres con atribución, generación IA, o ambas) y límite de costo | Pendiente | El enunciado pide considerar costo, calidad, derechos de uso y riesgo de representación engañosa. |
 | Señales de comportamiento para inferir intereses, y cómo evitar que oculten información importante | Pendiente | Debe convivir con la regla de protección anti-burbuja (cupo mínimo local/nacional/internacional). |
