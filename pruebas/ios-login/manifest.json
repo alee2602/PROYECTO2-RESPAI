@@ -1,0 +1,8 @@
+{
+  "name": "Prueba Login iOS",
+  "short_name": "LoginTest",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}

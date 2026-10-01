@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Login Test" />
+<link rel="manifest" href="manifest.json" />
+<title>Prueba login iOS — Etapa 0</title>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 20px; }
+  button { display:block; width:100%; padding:14px; margin:10px 0; font-size:16px; }
+  pre { white-space: pre-wrap; background:#f2f2f2; padding:12px; border-radius:8px; font-size:13px; }
+</style>
+</head>
+<body>
+  <h2>Prueba de login — Etapa 0</h2>
+  <p>Esto NO es la app final. Solo valida si el login de Google funciona dentro de la PWA instalada en iPhone (riesgo conocido, sección 5 del CLAUDE.md).</p>
+
+  <button id="btn-popup">Entrar con Google (popup)</button>
+  <button id="btn-redirect">Entrar con Google (redirect)</button>
+  <button id="btn-logout">Cerrar sesión</button>
+
+  <h3>Estado:</h3>
+  <pre id="status">(sin acciones todavía)</pre>
+
+  <!-- config.js no se commitea (ver .gitignore); copiar config.example.js para generarlo -->
+  <script src="config.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import {
+      getAuth, GoogleAuthProvider,
+      signInWithPopup, signInWithRedirect, getRedirectResult,
+      onAuthStateChanged, signOut
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+    const app = initializeApp(window.FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    const statusEl = document.getElementById("status");
+
+    function log(msg) {
+      statusEl.textContent += "\n" + msg;
+      console.log(msg);
+    }
+
+    document.getElementById("btn-popup").onclick = () => {
+      log("Intentando signInWithPopup...");
+      signInWithPopup(auth, provider)
+        .then(r => log("Popup OK: " + r.user.email))
+        .catch(e => log("Popup FALLÓ: " + e.code + " - " + e.message));
+    };
+
+    document.getElementById("btn-redirect").onclick = () => {
+      log("Intentando signInWithRedirect...");
+      signInWithRedirect(auth, provider);
+    };
+
+    document.getElementById("btn-logout").onclick = () => {
+      signOut(auth).then(() => log("Sesión cerrada"));
+    };
+
+    getRedirectResult(auth)
+      .then(r => { if (r) log("Volvió de redirect OK: " + r.user.email); })
+      .catch(e => log("Volvió de redirect con ERROR: " + e.code + " - " + e.message));
+
+    onAuthStateChanged(auth, (user) => {
+      log(user ? ("onAuthStateChanged: sesión activa como " + user.email)
+                : "onAuthStateChanged: sin sesión");
+    });
+
+    log("Página cargada. ¿Standalone (instalada)? " + (window.navigator.standalone === true));
+  </script>
+</body>
+</html>
