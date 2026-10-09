@@ -45,6 +45,7 @@ Solo los correos listados en `isAdmin()` dentro de [`firestore.rules`](./firesto
 
 ## Dónde encontrar qué
 
+- **Qué ya está construido y qué no duplicar**: [`docs/estado-tecnico.md`](./docs/estado-tecnico.md) — léanlo antes de empezar a programar su parte
 - **Quién hace qué y con qué criterios de aceptación**: [`docs/roles-equipo.md`](./docs/roles-equipo.md)
 - **Qué está decidido y qué sigue pendiente**: [`docs/decisiones-pendientes.md`](./docs/decisiones-pendientes.md)
 - **Historial de ciclos de ingeniería (para la rúbrica)**: [`docs/ciclos.md`](./docs/ciclos.md)
