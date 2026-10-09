@@ -82,3 +82,48 @@ Formato por ciclo: qué se esperaba, qué pasó, qué se cambió y por qué.
 **Qué se cambió y por qué:** popup es más simple de implementar — con redirect hay que leer `getRedirectResult()` al cargar la página (la navegación saca al usuario de la app y vuelve), lo que complica el código y el manejo de estado, sin ninguna ganancia ya que popup funcionó sin problema en la prueba real. Queda el redirect documentado por si algún navegador específico bloqueara el popup más adelante.
 
 **Pendiente:** cuando se construya el login real de la PWA (Rol 1), usar `signInWithPopup` como implementación principal.
+
+## 2026-10-09 — Monorepo montado (Next.js + npm workspaces)
+
+**Se esperaba:** montar `apps/app`, `apps/admin`, `packages/shared` como workspaces que comparten tipos, una vez confirmado Next.js con el equipo.
+
+**Qué pasó:**
+- `package.json` raíz con `"workspaces": ["apps/*", "packages/*"]` (npm workspaces, sin herramienta extra).
+- `apps/app` scaffoldeado con `create-next-app` (Next.js 16, App Router, TypeScript, sin ESLint/Tailwind por ahora).
+- `packages/shared` convertido en paquete real (`@respai/shared`, `index.ts` que reexporta `news.ts`), consumido desde `apps/app` vía `transpilePackages` en `next.config.ts` (sin paso de build aparte para el paquete compartido).
+- Cliente de Firebase (`apps/app/lib/firebase.ts`) y variables de entorno con prefijo `NEXT_PUBLIC_` (requerido por Next.js para exponerlas al navegador).
+- `app/page.tsx` reemplazado por un placeholder que lee la colección `news` de Firestore, para confirmar que toda la cadena Next.js → Firebase → Firestore funciona. No es el feed final (eso es de Rol 1).
+- `npm run build` corrido y exitoso después de un error menor (extensión `.ts` en un import de `packages/shared/index.ts`).
+- Se encontró y arregló un bug de configuración: el `.gitignore` que genera `create-next-app` dentro de `apps/app` ignoraba también `.env.example` (no debería, ese archivo sí se sube). Se agregó la excepción, igual que en el `.gitignore` raíz.
+- **Decisión sobre `functions/`:** el endpoint del chat vive como API route dentro de `apps/app` (`app/api/chat/`), no como proyecto de Vercel aparte — un solo proyecto que desplegar y configurar, y el chat está pegado al frontend de todos modos. La usuaria **eliminó la carpeta `functions/`** en consecuencia.
+- Se registra también: `npm audit` marca 4 vulnerabilidades "high" en `@grpc/grpc-js` (dependencia transitiva de `firebase`/Firestore). La única corrección automática implica bajar a `firebase@9.14.0` (regresión de varios años), así que no se aplicó. El riesgo real es bajo para este proyecto (aplica a configuraciones de mTLS del lado servidor, no al uso típico del cliente en el navegador).
+
+**Qué se cambió y por qué:** se revirtió sobre la marcha la estructura original de `/functions` (pensada para Cloud Functions de Firebase en el CLAUDE.md inicial) porque ya no aplica tras decidir Vercel + Next.js para todo. Se avisa al equipo (sobre todo a quien tenga el Rol 2) para que no construya nada ahí.
+
+**Pendiente:** scaffoldear `apps/admin` igual que `apps/app`; probar `npm run dev` localmente; avisar al equipo del cambio de `functions/`.
+
+## 2026-10-09 — `apps/app` se renombra a `apps/mobile`
+
+**Se esperaba:** que el nombre de la carpeta (`apps/app`) no generara confusión al trabajar en el proyecto.
+
+**Qué pasó:** al ver el árbol de archivos en el editor, la carpeta del App Router de Next.js (que el framework exige llamar literalmente `app/`) quedaba anidada como `apps/app/app`, visualmente confusa. Se renombró la carpeta externa a `apps/mobile` (y el paquete de npm de `@respai/app` a `@respai/mobile`).
+
+**Qué se cambió y por qué:**
+- `apps/app/` → `apps/mobile/` (y su `package.json`, `name`).
+- Se borró `package-lock.json` y `node_modules` (raíz y del paquete) y se corrió `npm install` de nuevo para que los workspaces de npm reconecten con la nueva ruta.
+- Se verificó `npm run build` otra vez — compila igual que antes del cambio.
+- Se actualizaron las referencias a `apps/app` en `CLAUDE.md`, `docs/roles-equipo.md`, `docs/decisiones-pendientes.md` y `apps/mobile/README.md`.
+
+No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La carpeta interna `apps/mobile/app/` (la de rutas de Next.js) se mantiene — esa la exige el framework, no se puede renombrar.
+
+**Pendiente:** si alguien ya había clonado el repo antes de este commit, necesita borrar su `node_modules` local y correr `npm install` de nuevo.
+
+## 2026-10-09 — `apps/admin` scaffoldeado
+
+**Se esperaba:** repetir el mismo proceso que `apps/mobile` para el portal (Next.js, workspace `@respai/admin`, cliente de Firebase, `transpilePackages` para `@respai/shared`).
+
+**Qué pasó:** se armó sin sorpresas, reutilizando el patrón ya resuelto. `app/page.tsx` es un placeholder con botón de login (popup) y lectura de la colección `news`, para confirmar la cadena completa antes de que Rol 3 construya el formulario real de publicación. `npm run build` exitoso.
+
+**Qué se cambió y por qué:** nada distinto al plan — se documenta este ciclo principalmente por la evidencia (rúbrica, sección 8), no porque algo fallara.
+
+**Pendiente:** cuando se confirme quién tiene el Rol 3, agregar su correo a `isAdmin()` en `firestore.rules` (ya está ahí el de Mónica y Bianca); Rol 3 construye el formulario real de noticias sobre este placeholder.

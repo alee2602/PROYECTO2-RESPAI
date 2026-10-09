@@ -135,7 +135,7 @@ Stack acordado: PWA · Firebase (solo Auth + Firestore) · Vercel (hosting y end
 - Prominencia por posición (hero, grande, normal, compacta).
 - Señales de comportamiento: qué se registra, cómo se convierte en afinidad por tema y cómo se evita que una afinidad desplace noticias importantes.
 - Pruebas automáticas del ranking que demuestren que una noticia importante no desaparece por ubicación o preferencias.
-- Montar el monorepo (workspaces) para que `apps/app`, `apps/admin`, `functions` y `packages/shared` compartan tipos.
+- Montar el monorepo (workspaces) para que `apps/mobile`, `apps/admin` y `packages/shared` compartan tipos. (Actualización 2026-10-09: ya no hay carpeta `functions` — el endpoint del chat vive como API route dentro de `apps/mobile`; ver `docs/ciclos.md`.)
 
 **Entregables por etapa**
 - Días 1-2 (desbloquea al equipo): monorepo, Firestore, reglas básicas y noticias semilla.

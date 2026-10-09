@@ -1,0 +1,8 @@
+{
+  "name": "respai-news-app",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

@@ -53,7 +53,7 @@ Se compone de:
 Estructura sugerida del repo:
 
 ```
-/apps/app        → la PWA (chat, feed, lector, selector de ubicación)
+/apps/mobile     → la PWA (chat, feed, lector, selector de ubicación)
 /apps/admin      → el portal administrativo
 /packages/shared → esquema de noticia, tipos, reglas de ranking
 /functions       → endpoint del chat y medidor de costos
