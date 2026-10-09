@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// Dueño: Rol 4 (Datos y relevancia). Cualquier cambio se avisa al equipo antes
+// de desplegarlo (ver docs/roles-equipo.md, regla 2).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Lista de correos con acceso al portal admin. Agregar aquí el correo de
+    // quien tenga el Rol 3 cuando se confirme con el equipo.
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email in [
+        'malejandras2004@gmail.com',
+        'biancalderon01.15@gmail.com'
+      ];
+    }
+
+    // News: cualquier usuario logueado puede leer. Solo admins pueden
+    // publicar, editar o borrar (criterio humano, nunca el código ni un modelo).
+    match /news/{newsId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Perfil del usuario (ubicación simulada, intereses inferidos): solo su dueño.
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+
+      // Señales de comportamiento (abrir, tiempo de lectura, compartir): solo su dueño.
+      match /signals/{signalId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // Todo lo demás, cerrado por defecto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

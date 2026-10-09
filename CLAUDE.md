@@ -70,29 +70,44 @@ En una PWA instalada en iOS, `signInWithPopup` suele fallar y `signInWithRedirec
 
 Se cierra entre todos el primer día. Cualquier cambio posterior se avisa al equipo y se actualiza en `/packages/shared`.
 
+**Actualización 2026-10-09:** los nombres de campos quedaron en inglés en el código (`packages/shared/news.ts`, tipo `News`), decisión del Rol 4 tomada antes de que el resto del equipo empezara a construir sobre el esquema (ver `docs/ciclos.md`). La tabla de abajo muestra el nombre en código junto a su equivalente en español, que es el que se usa en la conversación y en el resto de la documentación.
+
+| Campo en código | Equivalente en español |
+|---|---|
+| `title` | título |
+| `summary` | resumen |
+| `body` | cuerpo |
+| `sources` (`name`, `url?`, `type`) | fuentes (nombre, url, tipo) |
+| `validationStatus`: `confirmed` / `in_progress` / `unverified` | estado de validación: confirmada / en_desarrollo / no_verificada |
+| `validationNote` | nota de validación |
+| `scope`: `local` / `national` / `international` | alcance: local / nacional / internacional |
+| `country`, `region`, `topics` | país, región, temas |
+| `image` (`url`, `origin`, `attribution?`) | imagen (url, origen, atribución) |
+| `createdAt`, `publishedAt`, `updatedAt` | creada en, publicada en, actualizada en |
+
 ```ts
-type Noticia = {
+type News = {
   id: string
-  titulo: string
-  resumen: string
-  cuerpo: string
-  // Procedencia
-  fuentes: { nombre: string; url?: string; tipo: 'original' | 'resumen' | 'ia' }[]
-  autorId: string            // quién la publicó en el portal
-  // Validación
-  estadoValidacion: 'confirmada' | 'en_desarrollo' | 'no_verificada'
-  notaValidacion?: string    // por qué tiene ese estado, qué falta, contradicciones
-  // Alcance geográfico (para relevancia)
-  alcance: 'local' | 'nacional' | 'internacional'
-  pais?: string
+  title: string
+  summary: string
+  body: string
+  // Provenance
+  sources: { name: string; url?: string; type: 'original' | 'summary' | 'ai' }[]
+  authorId: string            // quién la publicó en el portal
+  // Validation
+  validationStatus: 'confirmed' | 'in_progress' | 'unverified'
+  validationNote?: string     // por qué tiene ese estado, qué falta, contradicciones
+  // Geographic scope (para relevancia)
+  scope: 'local' | 'national' | 'international'
+  country?: string
   region?: string
-  temas: string[]
-  // Imagen
-  imagen?: { url: string; origen: 'foto_real' | 'libre_con_atribucion' | 'generada_ia'; atribucion?: string }
-  // Fechas
-  creadaEn: string
-  publicadaEn?: string
-  actualizadaEn?: string
+  topics: string[]
+  // Image
+  image?: { url: string; origin: 'real_photo' | 'free_attributed' | 'ai_generated'; attribution?: string }
+  // Dates
+  createdAt: string
+  publishedAt?: string
+  updatedAt?: string
 }
 ```
 

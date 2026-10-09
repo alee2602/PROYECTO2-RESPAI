@@ -19,8 +19,13 @@
   <p>Esto NO es la app final. Solo valida si el login de Google funciona dentro de la PWA instalada en iPhone (riesgo conocido, sección 5 del CLAUDE.md).</p>
 
   <button id="btn-popup">Entrar con Google (popup)</button>
-  <button id="btn-redirect">Entrar con Google (redirect)</button>
   <button id="btn-logout">Cerrar sesión</button>
+
+  <h3>Prueba de reglas de Firestore (requiere estar logueada arriba):</h3>
+  <button id="btn-read-news">Leer colección "news"</button>
+  <button id="btn-write-news">Escribir noticia de prueba (debe funcionar, eres admin)</button>
+  <button id="btn-write-own-profile">Escribir mi perfil en "users/{miUid}" (debe funcionar)</button>
+  <button id="btn-write-other-profile">Escribir en "users/otro-uid-inventado" (debe FALLAR)</button>
 
   <h3>Estado:</h3>
   <pre id="status">(sin acciones todavía)</pre>
@@ -31,12 +36,16 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
     import {
       getAuth, GoogleAuthProvider,
-      signInWithPopup, signInWithRedirect, getRedirectResult,
+      signInWithPopup,
       onAuthStateChanged, signOut
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      getFirestore, collection, getDocs, addDoc, doc, setDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     const app = initializeApp(window.FIREBASE_CONFIG);
     const auth = getAuth(app);
+    const db = getFirestore(app);
     const provider = new GoogleAuthProvider();
     const statusEl = document.getElementById("status");
 
@@ -52,18 +61,56 @@
         .catch(e => log("Popup FALLÓ: " + e.code + " - " + e.message));
     };
 
-    document.getElementById("btn-redirect").onclick = () => {
-      log("Intentando signInWithRedirect...");
-      signInWithRedirect(auth, provider);
-    };
-
     document.getElementById("btn-logout").onclick = () => {
       signOut(auth).then(() => log("Sesión cerrada"));
     };
 
-    getRedirectResult(auth)
-      .then(r => { if (r) log("Volvió de redirect OK: " + r.user.email); })
-      .catch(e => log("Volvió de redirect con ERROR: " + e.code + " - " + e.message));
+    document.getElementById("btn-read-news").onclick = async () => {
+      try {
+        const snap = await getDocs(collection(db, "news"));
+        log("Leer news OK: " + snap.size + " documento(s)");
+      } catch (e) {
+        log("Leer news FALLÓ: " + e.code);
+      }
+    };
+
+    document.getElementById("btn-write-news").onclick = async () => {
+      try {
+        const ref = await addDoc(collection(db, "news"), {
+          title: "Noticia de prueba (reglas de Firestore)",
+          summary: "Prueba de Etapa 0",
+          body: "Esto es una prueba, se puede borrar.",
+          sources: [],
+          authorId: auth.currentUser ? auth.currentUser.uid : "desconocido",
+          validationStatus: "unverified",
+          scope: "local",
+          topics: ["prueba"],
+          createdAt: serverTimestamp()
+        });
+        log("Escribir news OK: " + ref.id);
+      } catch (e) {
+        log("Escribir news FALLÓ: " + e.code);
+      }
+    };
+
+    document.getElementById("btn-write-own-profile").onclick = async () => {
+      if (!auth.currentUser) { log("Primero inicia sesión."); return; }
+      try {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { lastTest: serverTimestamp() }, { merge: true });
+        log("Escribir mi perfil OK");
+      } catch (e) {
+        log("Escribir mi perfil FALLÓ: " + e.code);
+      }
+    };
+
+    document.getElementById("btn-write-other-profile").onclick = async () => {
+      try {
+        await setDoc(doc(db, "users", "otro-uid-inventado"), { lastTest: serverTimestamp() }, { merge: true });
+        log("Escribir perfil ajeno: OK (esto NO debería pasar)");
+      } catch (e) {
+        log("Escribir perfil ajeno FALLÓ (esperado): " + e.code);
+      }
+    };
 
     onAuthStateChanged(auth, (user) => {
       log(user ? ("onAuthStateChanged: sesión activa como " + user.email)

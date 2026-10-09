@@ -44,3 +44,41 @@ Formato por ciclo: qué se esperaba, qué pasó, qué se cambió y por qué.
 **Qué se cambió y por qué:** se descarta el riesgo que tenía más incertidumbre del proyecto. La hipótesis del CLAUDE.md (basada en problemas reportados en otros proyectos) no se cumplió en este caso concreto — posiblemente porque Firebase Auth usa `authDomain` en `firebaseapp.com`, que iOS no trata como "third-party" de la misma forma que un dominio arbitrario. No se cambia nada de la arquitectura planeada; se puede seguir construyendo con `signInWithPopup` o `signInWithRedirect` sin plan de contingencia adicional.
 
 **Pendiente:** repetir esta misma prueba en al menos un Android antes de dar por cerrado el checklist de Etapa 0 (debería funcionar sin complicaciones, pero no se ha probado todavía).
+
+## 2026-10-09 — Reglas reales de Firestore (Rol 4)
+
+**Se esperaba:** reemplazar el modo de prueba abierto de Firestore (dejado así desde el 30 de septiembre) por reglas de seguridad reales, antes de que el equipo empiece a publicar/leer noticias de verdad.
+
+**Qué pasó:**
+- Se definió cómo identificar a un "admin" del portal: por correo de Gmail, en una función dentro del propio archivo de reglas (`isAdmin()`), en vez de una lista separada en la consola de Firebase — así queda versionado, revisable por PR y no depende de configuración manual invisible.
+- Se escribieron `firestore.rules` (lectura de `noticias` para cualquier usuario logueado, escritura solo para admins; `usuarios/{uid}` y su subcolección `senales` solo accesibles por su propio dueño; todo lo demás cerrado por defecto), más `firebase.json`, `firestore.indexes.json` y `.firebaserc` para poder desplegar con un solo comando.
+- Se desplegaron con `firebase deploy --only firestore:rules`. Deploy exitoso.
+
+**Qué se cambió y por qué:** se decidió no usar una colección `admins` en Firestore (que había sido la primera idea) porque requeriría conseguir de antemano el UID de cada admin, algo incómodo de coordinar en equipo. El correo es más fácil de conseguir y de revisar a simple vista en el código.
+
+**Pendiente:** agregar el correo de quien tenga el Rol 3 (portal) a `isAdmin()` en `firestore.rules` en cuanto el equipo lo confirme.
+- **Actualización 2026-10-09, tarde:** se agregó el segundo correo admin (Rol 3, confirmado por la usuaria) a `firestore.rules` y se volvió a desplegar. Pendiente resuelto.
+- **Actualización 2026-10-09, validación:** se agregaron botones de prueba a `pruebas/ios-login/index.html` (leer `news`, escribir `news`, escribir perfil propio, escribir perfil ajeno) y se probaron con sesión real. Resultado, los 5 casos se comportaron como se esperaba: leer `news` OK (cualquier logueado), escribir `news` OK con correo admin, escribir perfil propio OK, escribir perfil ajeno DENEGADO, escribir `news` con un correo no-admin DENEGADO. Reglas validadas con evidencia real, no solo con que el deploy compiló.
+
+## 2026-10-09 — Esquema de noticia pasa a inglés
+
+**Se esperaba:** mantener el esquema en español, ya que cambiarlo implicaba tocar `packages/shared`, `CLAUDE.md` y `firestore.rules` al mismo tiempo.
+
+**Qué pasó:** la usuaria (Rol 4, dueña del esquema) pidió pasar los nombres de campos a inglés, señalando que **nadie del equipo había empezado a construir sobre el esquema todavía** — el costo de cambiarlo ahora es el más bajo que va a ser nunca, y solo iba a subir con el tiempo. Se aceptó el argumento y se hizo el cambio:
+- `packages/shared/noticia.ts` → `packages/shared/news.ts` (tipo `News`, campos en inglés, con un comentario de mapeo español↔inglés para quien lea el código).
+- `firestore.rules`: colecciones `noticias`→`news`, `usuarios`→`users`, `senales`→`signals`. Redesplegado.
+- `CLAUDE.md` sección 6: se actualizó el bloque de tipo y se agregó una tabla de equivalencias, para que la documentación (que sigue en español) y el código no queden desincronizados.
+
+**Qué se cambió y por qué:** se revirtió la recomendación inicial (mantener español) ante el argumento de costo-beneficio de la usuaria, que es correcto: el esquema efectivamente no tenía ningún consumidor todavía (Roles 1, 2 y 3 no habían empezado). Si se hubiera esperado más, el cambio habría sido mucho más caro.
+
+**Pendiente:** avisar al equipo (sobre todo a quien tenga los Roles 1 y 3, que van a consumir este esquema pronto) que los nombres de campos están en inglés, con la tabla de equivalencias de `CLAUDE.md` como referencia.
+
+## 2026-10-09 — Se elige popup sobre redirect para el login
+
+**Se esperaba:** dado que ambos métodos funcionaron en la prueba de iPhone (ver ciclo del 30 de septiembre), no había necesidad técnica de elegir uno — cualquiera serviría.
+
+**Qué pasó:** la usuaria (Rol 1 sería quien construya el login real, pero la decisión se tomó aquí con Rol 4) prefirió fijar `signInWithPopup` como el método que va a usar la app, dejando `signInWithRedirect` solo documentado como alternativa de respaldo. Se actualizó `pruebas/ios-login/index.html` y su README para reflejar esto (etiquetas de los botones, nota de resultado).
+
+**Qué se cambió y por qué:** popup es más simple de implementar — con redirect hay que leer `getRedirectResult()` al cargar la página (la navegación saca al usuario de la app y vuelve), lo que complica el código y el manejo de estado, sin ninguna ganancia ya que popup funcionó sin problema en la prueba real. Queda el redirect documentado por si algún navegador específico bloqueara el popup más adelante.
+
+**Pendiente:** cuando se construya el login real de la PWA (Rol 1), usar `signInWithPopup` como implementación principal.

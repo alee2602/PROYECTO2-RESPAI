@@ -17,4 +17,6 @@ No es parte de la app final. Es un HTML suelto (sin framework, sin build) para a
 6. Abrir el ícono instalado (no la pestaña de Safari) y repetir la prueba de login ahí dentro.
 7. Cerrar la app instalada por completo y volver a abrirla: ver si `onAuthStateChanged` sigue mostrando sesión activa.
 
-Resultado y decisión tomada: ver `/docs/ciclos.md`.
+## Resultado (2026-09-30 / 2026-10-09)
+
+Tanto `signInWithPopup` como `signInWithRedirect` funcionaron en la PWA instalada en iPhone, con sesión persistente. **Decisión: la app usa `signInWithPopup`.** El botón de redirect se quitó de esta página (generaba confusión al probarlo sin sesión iniciada) — el resultado de que también funcionaba queda documentado aquí y en `/docs/ciclos.md`, por si hiciera falta retomarlo como respaldo.
