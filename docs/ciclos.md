@@ -127,3 +127,15 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** nada distinto al plan — se documenta este ciclo principalmente por la evidencia (rúbrica, sección 8), no porque algo fallara.
 
 **Pendiente:** cuando se confirme quién tiene el Rol 3, agregar su correo a `isAdmin()` en `firestore.rules` (ya está ahí el de Mónica y Bianca); Rol 3 construye el formulario real de noticias sobre este placeholder.
+
+## 2026-10-09 — Noticias semilla cargadas
+
+**Se esperaba:** cerrar el último entregable de "Días 1-2" de Rol 4 (monorepo y Firestore ya estaban listos) con 10-15 noticias de ejemplo para desbloquear a Roles 1, 2 y 3.
+
+**Qué pasó:** se armó `scripts/seed-news/` (herramienta de un solo uso, mismo patrón que `pruebas/ios-login`: HTML sin framework, login con Google, escritura por el SDK de cliente — respeta las reglas de Firestore reales, sin atajos de admin SDK). 12 noticias ficticias pero realistas, con la variedad exigida: 3 alcances, 4 países distintos en internacional, 7 temas, casos de fuente insuficiente, fuentes contradictorias y fuente única no oficial, y 3 noticias sin imagen. Desplegado a Vercel y corrido con sesión admin real — resultado: 12 creadas, 0 fallidas.
+
+**Qué se cambió y por qué:** se descartó usar el Admin SDK de Firebase (que hubiera requerido generar y proteger una clave de servicio nueva) a favor de reusar el cliente ya autenticado como admin — menos superficie de secretos que manejar, y además sirve como una prueba más de que las reglas de Firestore funcionan en un caso real de carga masiva.
+
+**Qué queda cerrado:** con esto, los tres entregables "Días 1-2" de Rol 4 en `docs/roles-equipo.md` están completos: monorepo, Firestore con reglas reales, y noticias semilla.
+
+**Pendiente:** verificar en `apps/mobile` (con `npm run dev`) que el placeholder ahora muestra las 12 noticias cargadas, como confirmación visual de punta a punta.

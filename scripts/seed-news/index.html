@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cargar noticias semilla</title>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 20px; max-width: 700px; margin: 0 auto; }
+  button { display:block; width:100%; padding:14px; margin:10px 0; font-size:16px; }
+  pre { white-space: pre-wrap; background:#f2f2f2; padding:12px; border-radius:8px; font-size:13px; }
+</style>
+</head>
+<body>
+  <h2>Cargar noticias semilla (Rol 4)</h2>
+  <p>Herramienta de un solo uso, no es parte de la app final. Escribe 12 noticias de ejemplo (ficticias) en la colección <code>news</code> de Firestore. Requiere iniciar sesión con una cuenta admin (ver <code>isAdmin()</code> en <code>/firestore.rules</code>).</p>
+
+  <button id="btn-login">Entrar con Google</button>
+  <button id="btn-seed">Cargar 12 noticias semilla</button>
+
+  <h3>Estado:</h3>
+  <pre id="status">(sin acciones todavía)</pre>
+
+  <!-- config.js no se commitea (ver .gitignore); copiar config.example.js para generarlo -->
+  <script src="config.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import {
+      getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      getFirestore, collection, addDoc, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+    const app = initializeApp(window.FIREBASE_CONFIG);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const statusEl = document.getElementById("status");
+    function log(msg) { statusEl.textContent += "\n" + msg; console.log(msg); }
+
+    document.getElementById("btn-login").onclick = () => {
+      signInWithPopup(auth, new GoogleAuthProvider())
+        .then(r => log("Login OK: " + r.user.email))
+        .catch(e => log("Login FALLÓ: " + e.code));
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      log(user ? "Sesión activa: " + user.email : "Sin sesión");
+    });
+
+    // 12 noticias ficticias pero realistas. Variedad: 3 locales, 4 nacionales,
+    // 5 internacionales (4 países distintos); varios temas; al menos una sin
+    // imagen; 4 en estado distinto de "confirmed" (incluye un caso de fuentes
+    // contradictorias y uno de fuente única insuficiente).
+    const PLACEHOLDER_IMG = (seed) =>
+      `https://picsum.photos/seed/${seed}/800/450`;
+    const PLACEHOLDER_ATTR = "Foto de muestra (picsum.photos) — contenido de prueba, no corresponde al hecho real";
+
+    const seedNews = [
+      {
+        title: "Antigua Guatemala inaugura red de wifi público en el centro histórico",
+        summary: "La municipalidad instaló puntos de acceso gratuito en el parque central y calles aledañas.",
+        body: "La Municipalidad de Antigua Guatemala anunció la entrada en funcionamiento de una red de wifi público gratuito en el centro histórico, como parte de un plan de modernización de servicios turísticos. El servicio cubre el parque central y las calles principales.",
+        sources: [
+          { name: "Municipalidad de Antigua Guatemala (comunicado oficial)", type: "original" },
+          { name: "Prensa Libre", url: "https://www.prensalibre.com", type: "summary" }
+        ],
+        validationStatus: "confirmed",
+        scope: "local", country: "Guatemala", region: "Sacatepéquez",
+        topics: ["tecnología", "turismo"],
+        image: { url: PLACEHOLDER_IMG("antigua-wifi"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      },
+      {
+        title: "Vecinos de zona 10 reportan cortes de agua intermitentes",
+        summary: "Varios residentes denuncian cortes de agua sin aviso previo durante la última semana.",
+        body: "Vecinos de la zona 10 de la Ciudad de Guatemala reportaron cortes de agua intermitentes durante la última semana. Hasta el momento no hay una explicación oficial de la empresa municipal de agua.",
+        sources: [
+          { name: "Reportes de vecinos en redes sociales", type: "original" }
+        ],
+        validationStatus: "unverified",
+        validationNote: "Solo hay reportes de vecinos, ninguna fuente oficial lo ha confirmado todavía. No se publica como confirmada hasta tener una segunda fuente.",
+        scope: "local", country: "Guatemala", region: "Ciudad de Guatemala",
+        topics: ["servicios públicos"]
+      },
+      {
+        title: "Feria patronal de Quetzaltenango anuncia cartel de artistas",
+        summary: "La feria de diciembre contará con artistas nacionales e internacionales.",
+        body: "Los organizadores de la feria patronal de Quetzaltenango presentaron el cartel de artistas para la edición de este año, con presentaciones de música nacional e internacional.",
+        sources: [
+          { name: "Comité de Feria de Quetzaltenango", type: "original" }
+        ],
+        validationStatus: "confirmed",
+        scope: "local", country: "Guatemala", region: "Quetzaltenango",
+        topics: ["cultura"],
+        image: { url: PLACEHOLDER_IMG("feria-xela"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      },
+      {
+        title: "Banguat mantiene tasa de interés líder sin cambios",
+        summary: "Es el tercer mes consecutivo que la tasa se mantiene igual.",
+        body: "El Banco de Guatemala decidió mantener la tasa de interés líder sin cambios por tercer mes consecutivo, citando estabilidad en la inflación interanual.",
+        sources: [
+          { name: "Banco de Guatemala (comunicado de política monetaria)", type: "original" }
+        ],
+        validationStatus: "confirmed",
+        scope: "national", country: "Guatemala",
+        topics: ["economía", "finanzas"],
+        image: { url: PLACEHOLDER_IMG("banguat"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      },
+      {
+        title: "Ministerio de Salud investiga brote de gastroenteritis en escuelas de Quetzaltenango",
+        summary: "Dos fuentes dan cifras distintas de casos reportados.",
+        body: "El Ministerio de Salud confirmó que investiga un posible brote de gastroenteritis en escuelas de Quetzaltenango. Una fuente del ministerio reporta 12 casos, mientras un medio local reporta 20. La cifra exacta sigue sin confirmarse.",
+        sources: [
+          { name: "Ministerio de Salud Pública (vocería)", type: "original" },
+          { name: "Medio local de Quetzaltenango", type: "summary" }
+        ],
+        validationStatus: "in_progress",
+        validationNote: "Las fuentes se contradicen en el número de casos (12 vs. 20). Se espera un reporte oficial consolidado antes de confirmar.",
+        scope: "national", country: "Guatemala", region: "Quetzaltenango",
+        topics: ["salud"]
+      },
+      {
+        title: "Selección femenina de Guatemala clasifica a torneo regional de fútbol",
+        summary: "El equipo aseguró su cupo tras vencer a Honduras en el repechaje.",
+        body: "La selección femenina de fútbol de Guatemala aseguró su clasificación al torneo regional tras una victoria 2-1 sobre Honduras en el partido de repechaje.",
+        sources: [
+          { name: "Federación Nacional de Fútbol de Guatemala", type: "original" }
+        ],
+        validationStatus: "confirmed",
+        scope: "national", country: "Guatemala",
+        topics: ["deportes"]
+      },
+      {
+        title: "Congreso discute reforma a ley de contrataciones; bancadas difieren sobre su alcance",
+        summary: "Dos bancadas dan versiones distintas de qué cambiaría la reforma.",
+        body: "El Congreso de Guatemala inició la discusión de una reforma a la ley de contrataciones del Estado. Una bancada asegura que la reforma solo afecta montos mínimos, mientras otra sostiene que también cambia los plazos de adjudicación. No hay texto oficial publicado todavía.",
+        sources: [
+          { name: "Bancada A (declaración pública)", type: "original" },
+          { name: "Bancada B (declaración pública)", type: "original" }
+        ],
+        validationStatus: "in_progress",
+        validationNote: "Dos fuentes oficiales (ambas bancadas) se contradicen sobre el alcance real de la reforma. Se espera el texto oficial del Congreso antes de confirmar cualquier detalle.",
+        scope: "national", country: "Guatemala",
+        topics: ["política"]
+      },
+      {
+        title: "México anuncia plan nacional de datos abiertos para dependencias federales",
+        summary: "El plan busca publicar datasets de uso público antes de fin de año.",
+        body: "El gobierno de México presentó un plan nacional de datos abiertos que obligará a las dependencias federales a publicar datasets de uso público antes de fin de año, como parte de una política de transparencia.",
+        sources: [
+          { name: "Gobierno de México (comunicado oficial)", type: "original" },
+          { name: "Resumen generado para este chat a partir del comunicado oficial", type: "ai" }
+        ],
+        validationStatus: "confirmed",
+        scope: "international", country: "México",
+        topics: ["tecnología", "gobierno"],
+        image: { url: PLACEHOLDER_IMG("mexico-datos"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      },
+      {
+        title: "España registra ola de calor histórica en el sur del país",
+        summary: "Las autoridades emitieron alertas en varias provincias de Andalucía.",
+        body: "España registró una ola de calor histórica en el sur del país, con temperaturas que superaron los 44°C en varias provincias de Andalucía. Las autoridades emitieron alertas sanitarias.",
+        sources: [
+          { name: "Agencia Estatal de Meteorología (AEMET)", type: "original" }
+        ],
+        validationStatus: "confirmed",
+        scope: "international", country: "España",
+        topics: ["clima"],
+        image: { url: PLACEHOLDER_IMG("espana-calor"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      },
+      {
+        title: "Reportes no confirmados sobre nueva política de privacidad de una gran tecnológica",
+        summary: "Una sola fuente sin nombre asegura el cambio; la empresa no se ha pronunciado.",
+        body: "Circulan reportes no confirmados sobre una posible nueva política de privacidad de una gran empresa tecnológica en Estados Unidos. La fuente es anónima y la empresa no ha hecho ninguna declaración oficial al respecto.",
+        sources: [
+          { name: "Fuente anónima citada por un blog especializado", type: "summary" }
+        ],
+        validationStatus: "unverified",
+        validationNote: "Una sola fuente, anónima, sin declaración oficial de la empresa involucrada. No se puede confirmar con esta evidencia.",
+        scope: "international", country: "Estados Unidos",
+        topics: ["tecnología"]
+      },
+      {
+        title: "Precio internacional del café sube por segunda semana consecutiva",
+        summary: "Analistas atribuyen el alza a condiciones climáticas en zonas productoras.",
+        body: "El precio internacional del café subió por segunda semana consecutiva en los mercados globales, lo que analistas atribuyen a condiciones climáticas adversas en varias zonas productoras de Centro y Sudamérica.",
+        sources: [
+          { name: "Organización Internacional del Café (reporte semanal)", type: "original" }
+        ],
+        validationStatus: "confirmed",
+        scope: "international",
+        topics: ["economía"],
+        image: { url: PLACEHOLDER_IMG("cafe-precio"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      },
+      {
+        title: "Argentina confirma sede para el próximo campeonato sudamericano de atletismo",
+        summary: "El evento se realizará en Buenos Aires el próximo año.",
+        body: "La federación sudamericana de atletismo confirmó a Buenos Aires, Argentina, como sede del próximo campeonato sudamericano, que reunirá a atletas de toda la región.",
+        sources: [
+          { name: "Confederación Sudamericana de Atletismo", type: "original" }
+        ],
+        validationStatus: "confirmed",
+        scope: "international", country: "Argentina",
+        topics: ["deportes"],
+        image: { url: PLACEHOLDER_IMG("argentina-atletismo"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+      }
+    ];
+
+    document.getElementById("btn-seed").onclick = async () => {
+      if (!auth.currentUser) { log("Primero inicia sesión."); return; }
+      log(`Cargando ${seedNews.length} noticias...`);
+      let ok = 0, fail = 0;
+      for (const n of seedNews) {
+        try {
+          await addDoc(collection(db, "news"), {
+            ...n,
+            authorId: auth.currentUser.uid,
+            createdAt: serverTimestamp(),
+            publishedAt: serverTimestamp()
+          });
+          ok++;
+        } catch (e) {
+          fail++;
+          log(`FALLÓ "${n.title}": ${e.code}`);
+        }
+      }
+      log(`Listo: ${ok} creadas, ${fail} fallidas.`);
+    };
+  </script>
+</body>
+</html>

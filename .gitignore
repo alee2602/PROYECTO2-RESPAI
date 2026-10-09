@@ -6,9 +6,10 @@ node_modules/
 .env.*
 !.env.example
 
-# config de Firebase para la prueba estática de login (sin build tool, por eso
-# va en un archivo propio en vez de .env) — nunca el archivo real, solo el .example
+# config de Firebase para páginas estáticas sin build tool (por eso va en un
+# archivo propio en vez de .env) — nunca el archivo real, solo el .example
 pruebas/ios-login/config.js
+scripts/seed-news/config.js
 
 # builds
 .next/
