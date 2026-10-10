@@ -180,3 +180,13 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Por qué importa:** esto es relevancia personalizada de verdad — la misma noticia, vista distinto según quién la ve, sin usar ningún modelo. Buen ejemplo para la sección de arquitectura y decisiones de la demo.
 
 **Pendiente:** correr el botón "Corregir datos ya cargados" en la app desplegada (la usuaria lo hará); verificar visualmente con `npm run dev` cambiando de ubicación entre Guatemala/España/EE.UU.
+
+## 2026-10-10 — El feed no se actualizaba solo al cambiar de ubicación
+
+**Se esperaba:** que al guardar una nueva ubicación en `/ubicacion` y volver a `/feed` (`router.push`), el feed se recalculara de inmediato con la ubicación nueva.
+
+**Qué pasó:** la usuaria notó que, al cambiar de ubicación, el feed seguía mostrando el orden/etiquetas de la ubicación anterior hasta refrescar la página manualmente. La causa: `apps/mobile/next.config.ts` tenía activadas dos funciones experimentales de Next.js 16 (`cacheComponents`, `partialPrefetching`), activadas por defecto al crear el proyecto con `create-next-app`, no elegidas a propósito. Esas funciones cachean/precargan páginas para que la navegación se sienta más rápida — pero esta app es dinámica y personalizada (ubicación simulada + Firestore en tiempo real), así que el cache estaba sirviendo una versión de `/feed` precargada antes de guardar la nueva ubicación.
+
+**Qué se cambió y por qué:** se desactivaron ambas banderas en `next.config.ts`. Se verificó con `npm run build`: la ruta `/noticia/[id]` pasó de "Partial Prerender" a "Dynamic", confirmando que el cache agresivo ya no aplica.
+
+**Pendiente:** la usuaria debe reiniciar `npm run dev` (los cambios en `next.config.ts` no se recargan solos) y probar de nuevo cambiando de ubicación, para confirmar que el feed ya se actualiza sin refrescar manualmente.
