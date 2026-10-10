@@ -25,7 +25,7 @@ Navegación: el chat se abre/cierra desde la burbuja flotante (`ChatDock`, monta
 1. Crear `apps/mobile/.env.local` con los valores de Firebase (plantilla en `.env.example`; los valores los comparte el equipo).
 2. Desde la raíz del repo: `npm install`.
 3. `npm run dev --workspace=@respai/mobile` y abrir [http://localhost:3000](http://localhost:3000).
-4. Antes de abrir un PR: `npm run typecheck --workspace=@respai/mobile` y `npm run build --workspace=@respai/mobile`.
+4. Antes de abrir un PR: `npm run typecheck --workspace=@respai/mobile`, `npm run test --workspace=@respai/mobile` y `npm run build --workspace=@respai/mobile`.
 
 Si después de cambiar de rama algo se ve "a medias" (estilos nuevos con componentes viejos), detener el servidor, borrar `apps/mobile/.next` y volver a correr `npm run dev`.
 

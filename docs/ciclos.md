@@ -139,3 +139,18 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué queda cerrado:** con esto, los tres entregables "Días 1-2" de Rol 4 en `docs/roles-equipo.md` están completos: monorepo, Firestore con reglas reales, y noticias semilla.
 
 **Pendiente:** verificar en `apps/mobile` (con `npm run dev`) que el placeholder ahora muestra las 12 noticias cargadas, como confirmación visual de punta a punta.
+
+## 2026-10-10 — Ranking real por ubicación + protección anti-burbuja (Rol 4, Etapa 1)
+
+**Se esperaba:** reemplazar `fallbackFeed` (orden provisional que Rol 1 dejó como placeholder en `apps/mobile/lib/feed.ts`) por el ranking real de Rol 4: ubicación + recencia, sin modelo.
+
+**Qué pasó:**
+- Se implementó `rankNewsByLocation` en `apps/mobile/lib/ranking.ts`, deliberadamente sin depender de `lib/feed.ts` ni `lib/news.ts` (que inicializa Firebase) para que el módulo sea puro y se pueda probar con `node --test` sin arrastrar nada más.
+- Primer intento del piso anti-burbuja tenía un bug: al promover cada alcance faltante (local/nacional/internacional) a la misma posición fija de la ventana protegida, el segundo alcance insertado empujaba al primero fuera de esa ventana. **Las pruebas automáticas lo encontraron de inmediato** (`lib/ranking.test.ts`, caso "el top del feed incluye local, nacional e internacional cuando existen los tres" falló). Se corrigió calculando qué alcances faltan una sola vez contra la ventana original, y promoviendo todos juntos en una sola inserción.
+- 4 pruebas con el test runner nativo de Node (`node --experimental-strip-types --test`, cero dependencias nuevas, mismo patrón que ya usaba `scripts/generate-maps.mjs` de Rol 1): el top incluye los 3 alcances cuando existen, no se pierde ninguna noticia, el orden por cercanía+recencia es correcto, y no revienta si un alcance no existe en el pool.
+- Para que TypeScript aceptara los imports con extensión `.ts` que exige la resolución nativa de módulos de Node, se agregó `"allowImportingTsExtensions": true` al `tsconfig.json` de `apps/mobile` (ya tenía `noEmit: true`, requisito para esa opción). `npm run typecheck` y `npm run build` se corrieron después del cambio para confirmar que no se rompió nada.
+- `rankFeed` en `lib/feed.ts` ahora arma el `FeedItem[]` final usando `rankNewsByLocation`, sin crear un import circular entre `feed.ts` y `ranking.ts`.
+
+**Qué se cambió y por qué:** el diseño original tenía un bug real de lógica (no de sintaxis ni de tipos) que ni el build ni el typecheck hubieran detectado — exactamente el tipo de error para el que sirven las pruebas automáticas que pedía el criterio de aceptación del rol ("pruebas que demuestren que una noticia importante no desaparece por ubicación o preferencias").
+
+**Pendiente:** afinidad por tema a partir de señales de comportamiento (`docs/senales.md`), sin desplazar el piso anti-burbuja — Etapa 3. Abrir PR en rama `rol4/ranking-ubicacion` y conseguir aprobación de alguien del equipo (branch protection activo desde el 2026-10-09).
