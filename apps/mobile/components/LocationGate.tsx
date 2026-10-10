@@ -21,7 +21,8 @@ export function LocationGate({ children }: { children: ReactNode }) {
   if (location === undefined) {
     return (
       <main className="center-screen" aria-busy="true">
-        <p className="muted">Cargando tu ubicación…</p>
+        <span className="spinner" />
+        <p className="muted small">Cargando tu ubicación…</p>
       </main>
     )
   }

@@ -8,10 +8,10 @@ export default function UbicacionPage() {
   const router = useRouter()
   return (
     <main className="screen">
-      <Link href="/" className="back-link">
+      <Link href="/feed" className="back-link">
         ← Volver
       </Link>
-      <LocationPicker onSaved={() => router.push("/")} />
+      <LocationPicker onSaved={() => router.push("/feed")} />
     </main>
   )
 }
