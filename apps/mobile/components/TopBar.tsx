@@ -1,8 +1,10 @@
 import Link from "next/link"
+import type { ReactNode } from "react"
 
 // Barra superior fija para pantallas secundarias (ubicación, lector): botón
-// redondo de volver + título centrado. Respeta el notch con --safe-top.
-export function TopBar({ title, backHref = "/feed" }: { title?: string; backHref?: string }) {
+// redondo de volver + título centrado + acción opcional a la derecha.
+// Respeta el notch con --safe-top.
+export function TopBar({ title, backHref = "/feed", action }: { title?: string; backHref?: string; action?: ReactNode }) {
   return (
     <header className="topbar">
       <Link href={backHref} className="icon-btn" aria-label="Volver">
@@ -10,8 +12,8 @@ export function TopBar({ title, backHref = "/feed" }: { title?: string; backHref
           <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </Link>
-      {title && <p className="topbar-title">{title}</p>}
-      <span className="topbar-spacer" aria-hidden="true" />
+      <p className="topbar-title">{title}</p>
+      {action ?? <span className="topbar-spacer" aria-hidden="true" />}
     </header>
   )
 }

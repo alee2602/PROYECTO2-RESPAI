@@ -1464,6 +1464,191 @@ h3 {
   line-height: 1.1;
 }
 
+/* ---- Lector de noticia (app/noticia/[id]) ---- */
+
+.reader {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 16px var(--gutter) calc(40px + var(--safe-bottom));
+}
+
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.article-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.article-media {
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius);
+}
+
+.article-media.media-placeholder {
+  aspect-ratio: 16 / 7;
+}
+
+.article-figure figcaption {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.article-figure figcaption strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.article-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.article-kicker {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.article-title {
+  font-size: clamp(28px, 7.6vw, 40px);
+  line-height: 1.1;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.article-lead {
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.article-date {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Recuadro de validación: siempre visible, con borde del color del estado */
+.validation-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--status);
+  font-size: 15px;
+}
+
+.validation-confirmed {
+  --status: var(--confirmed);
+}
+
+.validation-in_progress {
+  --status: var(--progress);
+}
+
+.validation-unverified {
+  --status: var(--unverified);
+}
+
+.validation-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.validation-who {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.article-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 17.5px;
+  line-height: 1.7;
+}
+
+.article-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1.5px solid var(--ink);
+}
+
+.article-sources h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.article-sources ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.article-sources li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.article-source-name {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.article-source-name a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.article-source-name a svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.article-ai-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ai-bg);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.article-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.article-foot .card-reason {
+  border-top: 0;
+  padding-top: 0;
+}
+
 /* ---- Estados ---- */
 
 .state-box {
