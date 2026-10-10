@@ -1,6 +1,6 @@
 # Estado técnico del proyecto (qué ya existe, para no duplicar trabajo)
 
-Última actualización: 2026-10-09, por Rol 1 (login, PWA instalable y ubicación simulada en `apps/mobile`). Si algo de esto cambia, actualizar este documento en el mismo commit que el cambio.
+Última actualización: 2026-10-09, por Rol 1 (login, PWA instalable, ubicación simulada y feed en `apps/mobile`). Si algo de esto cambia, actualizar este documento en el mismo commit que el cambio.
 
 ## Resumen
 
@@ -20,6 +20,8 @@
 | Login con Google | `apps/admin/app/page.tsx` (ya implementado); `apps/mobile/lib/auth.tsx` + `apps/mobile/components/AuthGate.tsx` (ya implementado, Rol 1) | Método decidido: `signInWithPopup` (no redirect). Probado y funcionando en PWA instalada en iPhone real — evidencia en `docs/ciclos.md`, 2026-09-30. En `apps/mobile`, toda la app está detrás de `<AuthGate>` (en `app/layout.tsx`) con sesión persistente; para saber quién está logueado usar `useAuth()` / `useUser()` de `@/lib/auth`, no volver a llamar a `onAuthStateChanged`. |
 | PWA instalable (manifest, íconos, zonas seguras) | `apps/mobile/app/manifest.ts`, `apps/mobile/public/icons/`, `viewport`/`appleWebApp` en `apps/mobile/app/layout.tsx` | Instalable con "Añadir a pantalla de inicio" en iOS y Android. Íconos regenerables con `node scripts/generate-icons.mjs` (desde `apps/mobile`). Para respetar el notch y la barra inferior usar las variables CSS `--safe-top`/`--safe-bottom`/`--safe-left`/`--safe-right` de `globals.css`. Sin service worker por ahora (la app necesita red para Firestore de todos modos). |
 | Ubicación simulada del usuario | `apps/mobile/lib/locations.ts` (lista de países/regiones), `apps/mobile/lib/profile.tsx` (lee/escribe `users/{uid}`), pantalla `/ubicacion` | Se guarda en `users/{uid}` como `{ location: { country, region | null }, locationUpdatedAt }` (siempre con `merge: true`, así Rol 4 puede agregar otros campos sin chocar). `region: null` = "todo el país". Los textos de país/región coinciden exactamente con los de las noticias semilla; si el portal usa otros, hay que alinearlos en `locations.ts`. En la app, leerla con `useLocation()` / `useProfile()` de `@/lib/profile`. Nunca se usa GPS. |
+| Feed con jerarquía visual | `apps/mobile/app/feed/page.tsx`, `apps/mobile/lib/feed.ts`, `apps/mobile/lib/news.ts`, `apps/mobile/components/NewsCard.tsx` + `Badges.tsx` | Lee `news` publicadas (con `publishedAt`), convierte fechas `Timestamp` → texto ISO (las semillas usan `serverTimestamp()` aunque `News` declara `string`) y **oculta** cualquier noticia sin estado de validación válido o sin fuentes (avisa cuántas). Tarjetas hero / grande / normal / compacta, con distintivo de validación, primera fuente + tipo, y "por qué aparece". **Punto de integración para Rol 4:** `rankFeed` en `lib/feed.ts` (tipo `RankFn` → `FeedItem[]` con `prominence`, `reason`, `protectedByDiversity?`). Hoy usa `fallbackFeed`: orden provisional por cercanía a la ubicación + recencia, sin modelo y sin esconder nada. |
+| Sistema visual de la PWA | `apps/mobile/app/globals.css` | Poppins (titulares) + Inter (texto) vía `next/font`. Colores como variables CSS con modo oscuro. Distintivos con ícono + texto (no solo color). Noticia sin imagen → bloque gráfico por tema, que no parece foto. Imagen con `origin: "ai_generated"` → etiqueta "Imagen generada por IA" encima, siempre. |
 | Dónde vive el endpoint del chat | `apps/mobile/app/api/chat/` (carpeta todavía no creada, pero esa es la ruta) | Es una API route de Next.js, no un proyecto de Vercel aparte. La carpeta `/functions` que existía en Etapa 0 se eliminó. |
 
 ## Guía rápida por rol
@@ -34,6 +36,6 @@
 
 ## Huecos conocidos (no son bugs, son trabajo pendiente)
 
-- El feed no tiene lógica de ranking/ubicación todavía — Rol 4 está construyendo una consulta simple por ubicación para Etapa 1 (ranking completo + anti-burbuja es Etapa 3).
+- El feed usa un orden provisional por ubicación + recencia (`fallbackFeed` en `apps/mobile/lib/feed.ts`). Falta conectar el ranking completo + anti-burbuja de Rol 4 (Etapa 3) cambiando `rankFeed`.
 - El endpoint del chat no existe todavía (carpeta `apps/mobile/app/api/chat/` vacía).
 - Nadie tiene asignado buscar/redactar contenido para la "Publicación en vivo" de la demo — ver `docs/decisiones-pendientes.md`.
