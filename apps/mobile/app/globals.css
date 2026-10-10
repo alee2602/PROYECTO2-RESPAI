@@ -941,7 +941,7 @@ h3 {
   max-width: 1080px;
   margin: 0 auto;
   padding: var(--gutter);
-  padding-bottom: calc(32px + var(--safe-bottom));
+  padding-bottom: calc(96px + var(--safe-bottom)); /* aire para la burbuja del chat */
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1792,6 +1792,270 @@ h3 {
 .article-foot .card-reason {
   border-top: 0;
   padding-top: 0;
+}
+
+/* ---- Chat: hoja + burbuja flotante (components/ChatDock.tsx) ---- */
+
+.chat-bubble {
+  position: fixed;
+  right: calc(16px + var(--safe-right));
+  bottom: calc(18px + var(--safe-bottom));
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: 0 10px 28px rgb(17 19 24 / 0.28), 0 2px 6px rgb(17 19 24 / 0.18);
+  cursor: pointer;
+  animation: bubble-in 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+  transition: transform 0.12s ease;
+}
+
+.chat-bubble:active {
+  transform: scale(0.92);
+}
+
+/* Puntito rojo: hay algo para preguntar */
+.chat-bubble::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--ink);
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+
+.chat-dock {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.chat-dock-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(10 11 14 / 0.35);
+  animation: fade-in 0.25s ease both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.chat-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  height: calc(100dvh - 48px - var(--safe-top));
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px 24px 0 0;
+  background: var(--bg);
+  box-shadow: 0 -10px 40px rgb(0 0 0 / 0.18);
+  animation: sheet-up 0.38s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  overflow: hidden;
+}
+
+@keyframes sheet-up {
+  from {
+    translate: 0 100%;
+  }
+}
+
+@media (min-width: 720px) {
+  /* En pantallas grandes: panel flotante a la derecha, sobre la burbuja */
+  .chat-dock {
+    justify-content: flex-end;
+    align-items: flex-end;
+    padding: 24px;
+  }
+
+  .chat-sheet {
+    width: 420px;
+    height: min(720px, calc(100dvh - 48px));
+    border-radius: 24px;
+  }
+}
+
+.chat-sheet-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  padding: 18px 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-sheet-grip {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  translate: -50% 0;
+  width: 40px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border-strong);
+}
+
+.chat-sheet-title {
+  grid-column: 2;
+  text-align: center;
+  font-weight: 600;
+}
+
+.chat-sheet-head .icon-btn {
+  grid-column: 3;
+}
+
+/* Contenido del placeholder (components/ChatPlaceholder.tsx) */
+.chat-ph {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 22px 18px;
+}
+
+.chat-ph-intro h2 {
+  font-size: clamp(26px, 7.6vw, 32px);
+  line-height: 1.1;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.chat-ph-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+/* Ejemplos como burbujas de mensaje, no como botones (todavía no hacen nada) */
+.chat-ph-examples ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.chat-ph-examples li {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 18px 18px 4px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 15px;
+  animation: rise-in 0.35s 0.2s ease both;
+}
+
+.chat-ph-examples li:nth-child(2) {
+  animation-delay: 0.26s;
+}
+
+.chat-ph-examples li:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+.chat-ph-examples li:nth-child(4) {
+  animation-delay: 0.38s;
+}
+
+.chat-ph-soon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+
+.chat-ph-soon strong {
+  color: var(--ink);
+}
+
+.chat-ph-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--progress);
+}
+
+.text-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.chat-composer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px calc(12px + var(--safe-bottom));
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.chat-composer input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+}
+
+.chat-composer input:disabled {
+  color: var(--muted);
+}
+
+.chat-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.chat-send:disabled {
+  opacity: 0.35;
 }
 
 /* ---- Estados ---- */

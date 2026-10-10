@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 
-// Por ahora la pantalla inicial es el feed. Cuando exista el chat (Rol 2), esta
-// ruta pasa a ser el chat (pantalla inicial según CLAUDE.md).
+// La pantalla inicial es el chat: al abrir la app, ChatDock (en el layout) lo
+// muestra desplegado sobre la portada. Cerrado, queda como burbuja flotante.
 export default function Home() {
   redirect("/feed")
 }
