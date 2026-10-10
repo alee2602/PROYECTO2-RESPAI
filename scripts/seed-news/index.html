@@ -16,6 +16,7 @@
 
   <button id="btn-login">Entrar con Google</button>
   <button id="btn-seed">Cargar 12 noticias semilla</button>
+  <button id="btn-fix">Corregir datos ya cargados (scope México/España/EE.UU. + fuente de Antigua)</button>
 
   <h3>Estado:</h3>
   <pre id="status">(sin acciones todavía)</pre>
@@ -28,7 +29,7 @@
       getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
-      getFirestore, collection, addDoc, serverTimestamp
+      getFirestore, collection, addDoc, getDocs, query, where, updateDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     const app = initializeApp(window.FIREBASE_CONFIG);
@@ -151,7 +152,7 @@
           { name: "Resumen generado para este chat a partir del comunicado oficial", type: "ai" }
         ],
         validationStatus: "confirmed",
-        scope: "international", country: "México",
+        scope: "national", country: "México",
         topics: ["tecnología", "gobierno"],
         image: { url: PLACEHOLDER_IMG("mexico-datos"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
       },
@@ -163,7 +164,7 @@
           { name: "Agencia Estatal de Meteorología (AEMET)", type: "original" }
         ],
         validationStatus: "confirmed",
-        scope: "international", country: "España",
+        scope: "national", country: "España",
         topics: ["clima"],
         image: { url: PLACEHOLDER_IMG("espana-calor"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
       },
@@ -176,7 +177,7 @@
         ],
         validationStatus: "unverified",
         validationNote: "Una sola fuente, anónima, sin declaración oficial de la empresa involucrada. No se puede confirmar con esta evidencia.",
-        scope: "international", country: "Estados Unidos",
+        scope: "national", country: "Estados Unidos",
         topics: ["tecnología"]
       },
       {
@@ -224,6 +225,52 @@
         }
       }
       log(`Listo: ${ok} creadas, ${fail} fallidas.`);
+    };
+
+    // Corrige documentos que ya están en Firestore (cargados antes de este
+    // arreglo), buscándolos por título exacto. No crea duplicados.
+    const fixes = [
+      {
+        title: "México anuncia plan nacional de datos abiertos para dependencias federales",
+        patch: { scope: "national" },
+      },
+      {
+        title: "España registra ola de calor histórica en el sur del país",
+        patch: { scope: "national" },
+      },
+      {
+        title: "Reportes no confirmados sobre nueva política de privacidad de una gran tecnológica",
+        patch: { scope: "national" },
+      },
+      {
+        title: "Antigua Guatemala inaugura red de wifi público en el centro histórico",
+        patch: {
+          sources: [
+            { name: "Municipalidad de Antigua Guatemala (comunicado oficial)", type: "original" },
+            { name: "Medio local de Antigua Guatemala", type: "summary" },
+          ],
+        },
+      },
+    ];
+
+    document.getElementById("btn-fix").onclick = async () => {
+      if (!auth.currentUser) { log("Primero inicia sesión."); return; }
+      log(`Buscando ${fixes.length} documentos para corregir...`);
+      let ok = 0, missing = 0, fail = 0;
+      for (const f of fixes) {
+        try {
+          const snap = await getDocs(query(collection(db, "news"), where("title", "==", f.title)));
+          if (snap.empty) { missing++; log(`No encontrado: "${f.title}"`); continue; }
+          for (const d of snap.docs) {
+            await updateDoc(d.ref, f.patch);
+            ok++;
+          }
+        } catch (e) {
+          fail++;
+          log(`FALLÓ "${f.title}": ${e.code}`);
+        }
+      }
+      log(`Listo: ${ok} corregidas, ${missing} no encontradas, ${fail} fallidas.`);
     };
   </script>
 </body>
