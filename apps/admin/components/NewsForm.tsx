@@ -2,15 +2,18 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { addDoc, collection } from "firebase/firestore"
+import { useRouter } from "next/navigation"
+import { addDoc, collection, deleteDoc, deleteField, doc, serverTimestamp, updateDoc } from "firebase/firestore"
 import { LOCATIONS_LIST } from "@respai/shared"
 import { db } from "@/lib/firebase"
 import { useAdmin } from "@/lib/auth"
+import { STATUS_LABEL } from "@/lib/labels"
 import {
   countsAsEvidence,
   emptyDraft,
   MIN_SOURCES_TO_CONFIRM,
   toNewsDoc,
+  toNewsUpdate,
   validateDraft,
   type DraftSource,
   type NewsDraft,
@@ -28,31 +31,42 @@ const SOURCE_TYPES: { value: DraftSource["type"]; label: string }[] = [
   { value: "ai", label: "Aporte generado por IA" },
 ]
 
-const STATUSES: { value: NewsDraft["validationStatus"]; label: string; hint: string }[] = [
-  {
-    value: "confirmed",
-    label: "Confirmada",
-    hint: `Al menos ${MIN_SOURCES_TO_CONFIRM} fuentes que no sean IA lo respaldan.`,
-  },
-  {
-    value: "in_progress",
-    label: "En desarrollo",
-    hint: "Hay información parcial o fuentes que se contradicen. Explica cuáles en la nota.",
-  },
-  { value: "unverified", label: "No verificada", hint: "Todavía no se puede confirmar. Explica qué falta." },
+const STATUSES: { value: NewsDraft["validationStatus"]; hint: string }[] = [
+  { value: "confirmed", hint: `Al menos ${MIN_SOURCES_TO_CONFIRM} fuentes que no sean IA lo respaldan.` },
+  { value: "in_progress", hint: "Hay información parcial o fuentes que se contradicen. Explica cuáles en la nota." },
+  { value: "unverified", hint: "Todavía no se puede confirmar. Explica qué falta." },
 ]
 
-type Saved = { id: string; published: boolean }
+type Action = "draft" | "publish" | "unpublish"
 
-// Formulario para crear una noticia. Quien la guarda (y decide su estado de
-// validación) es siempre una persona admin; aquí solo se aplican las reglas
-// mínimas de lib/newsDraft.ts.
-export function NewsForm() {
+const DONE_MESSAGE: Record<Action, { title: string; text: string }> = {
+  publish: {
+    title: "Noticia publicada",
+    text: "Ya está en Firestore con fecha de publicación: aparece en la app según la ubicación de cada persona.",
+  },
+  draft: { title: "Borrador guardado", text: "Quedó guardada sin fecha de publicación: la app no la muestra." },
+  unpublish: {
+    title: "Noticia despublicada",
+    text: "Se le quitó la fecha de publicación: la app deja de mostrarla. No se borró nada; puedes volver a publicarla.",
+  },
+}
+
+// Noticia que ya existe en Firestore (modo edición).
+export type ExistingNews = { id: string; published: boolean; draft: NewsDraft }
+
+// Formulario para crear o editar una noticia. Quien la guarda (y decide su
+// estado de validación) es siempre una persona admin; aquí solo se aplican las
+// reglas mínimas de lib/newsDraft.ts.
+export function NewsForm({ existing }: { existing?: ExistingNews }) {
   const admin = useAdmin()
-  const [draft, setDraft] = useState<NewsDraft>(emptyDraft)
+  const router = useRouter()
+  const [id, setId] = useState(existing?.id ?? null)
+  const [published, setPublished] = useState(existing?.published ?? false)
+  const [draft, setDraft] = useState<NewsDraft>(() => existing?.draft ?? emptyDraft())
   const [errors, setErrors] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
-  const [saved, setSaved] = useState<Saved | null>(null)
+  const [done, setDone] = useState<Action | null>(null)
+  const [editedLive, setEditedLive] = useState(false) // se guardaron cambios de una noticia ya publicada
 
   const set = <K extends keyof NewsDraft>(key: K, value: NewsDraft[K]) => setDraft((d) => ({ ...d, [key]: value }))
 
@@ -62,14 +76,10 @@ export function NewsForm() {
   const regions = LOCATIONS_LIST.find((l) => l.country === draft.country)?.regions ?? []
   const evidence = draft.sources.filter(countsAsEvidence).length
 
-  async function save(publish: boolean) {
-    const problems = validateDraft(draft, publish ? "publish" : "draft")
-    setErrors(problems)
-    if (problems.length) return
+  async function run(task: () => Promise<void>) {
     setBusy(true)
     try {
-      const ref = await addDoc(collection(db, "news"), toNewsDoc(draft, admin.uid, publish))
-      setSaved({ id: ref.id, published: publish })
+      await task()
     } catch (e) {
       const code = (e as { code?: string })?.code
       setErrors([
@@ -82,29 +92,64 @@ export function NewsForm() {
     }
   }
 
-  if (saved) {
+  // Publicar (o guardar cambios de una publicada, que ya está visible) exige la
+  // noticia completa; borrador y despublicar solo lo mínimo.
+  function save(action: Action) {
+    const problems = validateDraft(draft, action === "publish" ? "publish" : "draft")
+    setErrors(problems)
+    if (problems.length) return
+    run(async () => {
+      if (!id) {
+        const ref = await addDoc(collection(db, "news"), toNewsDoc(draft, admin.uid, action === "publish"))
+        setId(ref.id)
+      } else {
+        const update = toNewsUpdate(draft)
+        if (action === "publish" && !published) update.publishedAt = serverTimestamp()
+        if (action === "unpublish") update.publishedAt = deleteField()
+        await updateDoc(doc(db, "news", id), update)
+      }
+      setEditedLive(action === "publish" && published)
+      setPublished(action === "publish")
+      setDone(action)
+    })
+  }
+
+  function remove() {
+    if (!id || !window.confirm(`¿Borrar "${draft.title || "esta noticia"}"? Esto no se puede deshacer.`)) return
+    run(async () => {
+      await deleteDoc(doc(db, "news", id))
+      router.push("/")
+    })
+  }
+
+  if (done) {
+    const msg = DONE_MESSAGE[done]
     return (
       <div className="card">
-        <h2>{saved.published ? "Noticia publicada" : "Borrador guardado"}</h2>
-        <p className="muted">
-          {saved.published
-            ? "Ya está en Firestore con fecha de publicación: aparece en la app según la ubicación de cada persona."
-            : "Quedó guardada sin fecha de publicación: la app no la muestra todavía."}
-        </p>
+        <h2>{editedLive ? "Cambios guardados" : msg.title}</h2>
+        <p className="muted">{msg.text}</p>
         <p className="muted small">
-          ID: <code>{saved.id}</code>
+          ID: <code>{id}</code>
         </p>
         <div className="form-actions">
-          <button
-            className="btn"
-            onClick={() => {
-              setDraft(emptyDraft())
-              setErrors([])
-              setSaved(null)
-            }}
-          >
-            Crear otra
-          </button>
+          {existing ? (
+            <button className="btn" onClick={() => setDone(null)}>
+              Seguir editando
+            </button>
+          ) : (
+            <button
+              className="btn"
+              onClick={() => {
+                setId(null)
+                setPublished(false)
+                setDraft(emptyDraft())
+                setErrors([])
+                setDone(null)
+              }}
+            >
+              Crear otra
+            </button>
+          )}
           <Link href="/" className="btn btn-primary">
             Volver al inicio
           </Link>
@@ -118,7 +163,7 @@ export function NewsForm() {
       className="news-form"
       onSubmit={(e) => {
         e.preventDefault()
-        save(true)
+        save("publish")
       }}
     >
       <section className="card">
@@ -279,7 +324,7 @@ export function NewsForm() {
                 checked={draft.validationStatus === s.value}
                 onChange={() => set("validationStatus", s.value)}
               />
-              <strong>{s.label}</strong>
+              <strong>{STATUS_LABEL[s.value]}</strong>
               <span className="muted small">{s.hint}</span>
             </label>
           ))}
@@ -302,12 +347,31 @@ export function NewsForm() {
         </div>
       )}
 
+      {existing && (
+        <p className="muted small">
+          {published
+            ? "Esta noticia está publicada: los cambios se ven en la app en cuanto los guardes."
+            : "Esta noticia es un borrador: la app no la muestra."}
+        </p>
+      )}
       <div className="form-actions">
-        <button type="button" className="btn" onClick={() => save(false)} disabled={busy}>
-          Guardar borrador
-        </button>
+        {existing && (
+          <button type="button" className="btn btn-danger" onClick={remove} disabled={busy}>
+            Borrar
+          </button>
+        )}
+        <span className="spacer" />
+        {published ? (
+          <button type="button" className="btn" onClick={() => save("unpublish")} disabled={busy}>
+            Despublicar
+          </button>
+        ) : (
+          <button type="button" className="btn" onClick={() => save("draft")} disabled={busy}>
+            Guardar borrador
+          </button>
+        )}
         <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? "Guardando…" : "Publicar"}
+          {busy ? "Guardando…" : published ? "Guardar cambios" : "Publicar"}
         </button>
       </div>
     </form>
