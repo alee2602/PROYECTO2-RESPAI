@@ -2,7 +2,8 @@ import { deleteField, serverTimestamp, type FieldValue } from "firebase/firestor
 import type { News } from "@respai/shared"
 
 // Reglas del formulario de noticia, sin UI, para poder probarlas y reusarlas
-// (crear ahora, editar y validar en los siguientes PRs del Rol 3).
+// al crear y al editar. El flujo de validación completo está explicado en
+// docs/validacion.md.
 
 export type SourceType = News["sources"][number]["type"]
 const SOURCE_TYPE_VALUES = ["original", "summary", "ai"] as const satisfies readonly SourceType[]
@@ -20,8 +21,16 @@ export type NewsDraft = {
   topics: string // separados por coma
   sources: DraftSource[]
   validationStatus: News["validationStatus"]
-  validationNote: string
+  validationNote: string // sin el prefijo de contradicción
+  // La persona declara que las fuentes se contradicen. No es un campo del
+  // esquema: se guarda como prefijo de validationNote (CONTRADICTION_PREFIX).
+  contradicts: boolean
+  // Confirmación de que alguien revisó el texto aportado por IA. Se pide en
+  // cada guardado y no se guarda.
+  aiReviewed: boolean
 }
+
+export const CONTRADICTION_PREFIX = "Fuentes contradictorias:"
 
 export const emptyDraft = (): NewsDraft => ({
   title: "",
@@ -34,6 +43,8 @@ export const emptyDraft = (): NewsDraft => ({
   sources: [{ name: "", url: "", type: "original" }],
   validationStatus: "unverified",
   validationNote: "",
+  contradicts: false,
+  aiReviewed: false,
 })
 
 export const MIN_SOURCES_TO_CONFIRM = 2
@@ -41,6 +52,50 @@ export const MIN_SOURCES_TO_CONFIRM = 2
 // Una fuente generada por IA nunca cuenta como prueba de que algo es verdad.
 export function countsAsEvidence(s: DraftSource): boolean {
   return s.type !== "ai" && s.name.trim() !== ""
+}
+
+function normalize(text: string): string {
+  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim()
+}
+
+export function hostOf(url: string): string | null {
+  try {
+    return new URL(url.trim()).hostname.replace(/^www\./, "")
+  } catch {
+    return null
+  }
+}
+
+// Dos fuentes son el mismo medio si tienen el mismo nombre (sin importar
+// tildes ni mayúsculas) o la misma URL de dominio: dos artículos de Prensa
+// Libre no se confirman entre sí. Devuelve, por cada fuente, el índice de la
+// primera fuente de su grupo (-1 si no tiene nombre).
+export function sourceGroups(sources: DraftSource[]): number[] {
+  const groups: number[] = []
+  sources.forEach((s, i) => {
+    if (!s.name.trim()) return groups.push(-1)
+    const name = normalize(s.name)
+    const host = hostOf(s.url)
+    const same = sources.findIndex(
+      (o, j) => j < i && o.name.trim() && (normalize(o.name) === name || (host !== null && hostOf(o.url) === host))
+    )
+    groups.push(same === -1 ? i : groups[same]!)
+  })
+  return groups
+}
+
+// Cuántas fuentes distintas, que no sean IA, respaldan la noticia.
+export function evidenceCount(sources: DraftSource[]): number {
+  const groups = sourceGroups(sources)
+  return new Set(groups.filter((g, i) => g !== -1 && countsAsEvidence(sources[i]!))).size
+}
+
+// En cuál de los casos del flujo de validación está la noticia (docs/validacion.md).
+export type Diagnosis = "contradiction" | "insufficient" | "enough"
+
+export function diagnose(d: NewsDraft): Diagnosis {
+  if (d.contradicts) return "contradiction"
+  return evidenceCount(d.sources) < MIN_SOURCES_TO_CONFIRM ? "insufficient" : "enough"
 }
 
 export function parseTopics(raw: string): string[] {
@@ -74,14 +129,17 @@ export function validateDraft(d: NewsDraft, mode: "draft" | "publish"): string[]
     if (s.url.trim() && !s.name.trim()) errors.push(`La fuente ${i + 1} tiene URL pero no nombre.`)
   })
 
-  // Aplica también a borradores: nunca se guarda "confirmada" sin evidencia.
+  // Aplican también a borradores: nunca se guarda "confirmada" sin evidencia
+  // ni una contradicción declarada con otro estado que no sea "en desarrollo".
   if (d.validationStatus === "confirmed") {
-    const evidence = d.sources.filter(countsAsEvidence).length
+    const evidence = evidenceCount(d.sources)
     if (evidence < MIN_SOURCES_TO_CONFIRM)
       errors.push(
-        `Para marcarla como confirmada hacen falta al menos ${MIN_SOURCES_TO_CONFIRM} fuentes que no sean IA (hay ${evidence}).`
+        `Para marcarla como confirmada hacen falta al menos ${MIN_SOURCES_TO_CONFIRM} fuentes distintas que no sean IA (hay ${evidence}).`
       )
   }
+  if (d.contradicts && d.validationStatus !== "in_progress")
+    errors.push("Si las fuentes se contradicen, la noticia queda En desarrollo hasta que se aclare.")
 
   if (mode === "draft") return errors
 
@@ -97,6 +155,12 @@ export function validateDraft(d: NewsDraft, mode: "draft" | "publish"): string[]
   if (d.validationStatus !== "confirmed" && !d.validationNote.trim())
     errors.push("Explica en la nota de validación por qué no está confirmada (qué falta o qué se contradice).")
 
+  if (d.contradicts && new Set(sourceGroups(d.sources).filter((g) => g !== -1)).size < 2)
+    errors.push("Para declarar que las fuentes se contradicen, agrega al menos las 2 fuentes distintas en conflicto.")
+
+  if (d.sources.some((s) => s.type === "ai" && s.name.trim()) && !d.aiReviewed)
+    errors.push("Hay una fuente de IA: confirma que una persona revisó y editó ese texto antes de publicarlo.")
+
   return errors
 }
 
@@ -106,7 +170,7 @@ function contentFields(d: NewsDraft) {
   const sources: News["sources"] = d.sources
     .filter((s) => s.name.trim())
     .map((s) => ({ name: s.name.trim(), type: s.type, ...(s.url.trim() ? { url: s.url.trim() } : {}) }))
-  const note = d.validationNote.trim()
+  const note = d.contradicts ? `${CONTRADICTION_PREFIX} ${d.validationNote.trim()}`.trim() : d.validationNote.trim()
   const country = d.country.trim()
   const region = d.scope === "international" ? "" : d.region
 
@@ -161,6 +225,9 @@ export function draftFromDoc(data: Record<string, unknown>): NewsDraft {
     .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
     .map((s) => ({ name: str(s.name), url: str(s.url), type: pick(s.type, SOURCE_TYPE_VALUES, "original") }))
 
+  const note = str(data.validationNote)
+  const contradicts = note.startsWith(CONTRADICTION_PREFIX)
+
   return {
     title: str(data.title),
     summary: str(data.summary),
@@ -171,6 +238,8 @@ export function draftFromDoc(data: Record<string, unknown>): NewsDraft {
     topics: (Array.isArray(data.topics) ? data.topics.filter((t) => typeof t === "string") : []).join(", "),
     sources: sources.length ? sources : emptyDraft().sources,
     validationStatus: pick(data.validationStatus, ["confirmed", "in_progress", "unverified"] as const, "unverified"),
-    validationNote: str(data.validationNote),
+    validationNote: contradicts ? note.slice(CONTRADICTION_PREFIX.length).trim() : note,
+    contradicts,
+    aiReviewed: false,
   }
 }

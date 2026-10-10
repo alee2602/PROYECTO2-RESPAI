@@ -1,6 +1,17 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { draftFromDoc, emptyDraft, parseTopics, toNewsDoc, toNewsUpdate, validateDraft, type NewsDraft } from "./newsDraft.ts"
+import {
+  CONTRADICTION_PREFIX,
+  diagnose,
+  draftFromDoc,
+  emptyDraft,
+  evidenceCount,
+  parseTopics,
+  toNewsDoc,
+  toNewsUpdate,
+  validateDraft,
+  type NewsDraft,
+} from "./newsDraft.ts"
 
 // Noticia local completa y publicable, como punto de partida de cada caso.
 function complete(patch: Partial<NewsDraft> = {}): NewsDraft {
@@ -126,4 +137,90 @@ test("editar: un documento incompleto o con valores raros se carga con valores s
   assert.equal(d.validationStatus, "unverified") // nunca se asume "confirmed"
   assert.deepEqual(d.sources, [{ name: "X", url: "", type: "original" }])
   assert.equal(d.scope, "local")
+})
+
+// --- Flujo de validación (docs/validacion.md) ---
+
+test("dos artículos del mismo medio cuentan como una sola fuente", () => {
+  const sameName = [
+    { name: "Prensa Libre", url: "", type: "original" as const },
+    { name: "prensa  libre", url: "", type: "summary" as const },
+  ]
+  assert.equal(evidenceCount(sameName), 1)
+
+  const sameDomain = [
+    { name: "Prensa Libre", url: "https://www.prensalibre.com/a", type: "original" as const },
+    { name: "PL Economía", url: "https://prensalibre.com/b", type: "summary" as const },
+  ]
+  assert.equal(evidenceCount(sameDomain), 1)
+
+  const errors = validateDraft(complete({ validationStatus: "confirmed", sources: sameName }), "publish")
+  assert.match(errors[0]!, /fuentes distintas.*hay 1/)
+})
+
+test("caso fuente insuficiente: con una sola fuente (o solo IA) el diagnóstico lo dice", () => {
+  assert.equal(diagnose(complete()), "insufficient")
+  const onlyAi = complete({
+    sources: [
+      { name: "Resumen IA", url: "", type: "ai" },
+      { name: "Otro resumen IA", url: "", type: "ai" },
+    ],
+  })
+  assert.equal(diagnose(onlyAi), "insufficient")
+})
+
+test("caso fuentes suficientes: el diagnóstico permite confirmar, pero no confirma solo", () => {
+  const two = complete({
+    sources: [
+      { name: "Municipalidad", url: "", type: "original" },
+      { name: "Prensa Libre", url: "", type: "summary" },
+    ],
+  })
+  assert.equal(diagnose(two), "enough")
+  assert.equal(two.validationStatus, "unverified") // el estado lo sigue eligiendo la persona
+})
+
+test("caso fuentes contradictorias: queda en desarrollo, con 2 fuentes y nota", () => {
+  const sources = [
+    { name: "Banco Central", url: "", type: "original" as const },
+    { name: "Goldman Sachs", url: "", type: "original" as const },
+  ]
+  const base = complete({ contradicts: true, sources, validationNote: "BCRA dice 2.7%, GS dice 3%." })
+
+  assert.equal(diagnose(base), "contradiction")
+  assert.deepEqual(validateDraft({ ...base, validationStatus: "in_progress" }, "publish"), [])
+  assert.equal(validateDraft({ ...base, validationStatus: "confirmed" }, "draft").length, 1)
+  assert.equal(validateDraft({ ...base, validationStatus: "unverified" }, "draft").length, 1)
+
+  const oneSource = { ...base, validationStatus: "in_progress" as const, sources: [sources[0]!] }
+  assert.ok(validateDraft(oneSource, "publish").some((e) => e.includes("2 fuentes distintas en conflicto")))
+})
+
+test("la contradicción se guarda como prefijo de la nota y se recupera al editar", () => {
+  const draft = complete({
+    contradicts: true,
+    validationStatus: "in_progress",
+    validationNote: "A dice X, B dice Y.",
+  })
+  const doc = toNewsDoc(draft, "uid-1", true) as unknown as Record<string, unknown>
+  assert.equal(doc.validationNote, `${CONTRADICTION_PREFIX} A dice X, B dice Y.`)
+
+  const back = draftFromDoc(doc)
+  assert.equal(back.contradicts, true)
+  assert.equal(back.validationNote, "A dice X, B dice Y.")
+
+  assert.equal(draftFromDoc({ validationNote: "Falta una segunda fuente." }).contradicts, false)
+})
+
+test("con una fuente de IA, publicar exige confirmar la revisión humana (un borrador no)", () => {
+  const withAi = complete({
+    sources: [
+      { name: "Municipalidad", url: "", type: "original" },
+      { name: "Resumen automático", url: "", type: "ai" },
+    ],
+  })
+  assert.ok(validateDraft(withAi, "publish").some((e) => e.includes("revisó y editó")))
+  assert.deepEqual(validateDraft(withAi, "draft"), [])
+  assert.deepEqual(validateDraft({ ...withAi, aiReviewed: true }, "publish"), [])
+  assert.equal(draftFromDoc(toNewsDoc({ ...withAi, aiReviewed: true }, "u", true) as never).aiReviewed, false)
 })

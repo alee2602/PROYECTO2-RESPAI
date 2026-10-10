@@ -494,3 +494,67 @@ code {
 .chip.error {
   color: var(--error);
 }
+
+/* Flujo de validación */
+.verify-box,
+.ai-notice {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.ai-notice {
+  background: var(--ai-bg);
+}
+
+.ai-notice > strong {
+  color: var(--ai);
+}
+
+.verify-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.source-hint {
+  grid-column: 1 / -1;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.check input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.diagnosis {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--unverified);
+  background: var(--unverified-bg);
+}
+
+.diagnosis.contradiction {
+  border-color: var(--progress);
+  background: var(--progress-bg);
+}
+
+.diagnosis.enough {
+  border-color: var(--confirmed);
+  background: var(--confirmed-bg);
+}
+
+.choice.blocked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

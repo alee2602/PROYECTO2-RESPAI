@@ -278,3 +278,25 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** nada respecto al plan. Se dejó fuera a propósito registrar *quién* editó (el esquema solo tiene `authorId`, de quien la creó): agregar un campo así es un cambio de esquema que se propondría al equipo si el flujo de validación (siguiente rama) lo necesita como trazabilidad.
 
 **Pendiente:** siguiente rama `rol3/validacion` (flujo completo: fuente insuficiente, fuentes contradictorias, noticia sin confirmar).
+
+## 2026-10-10 — Portal: flujo de validación para los tres casos del enunciado (Rol 3, Etapa 3)
+
+**Se esperaba:** completar el flujo de validación que pide `docs/roles-equipo.md` (fuente insuficiente, fuentes que se contradicen, noticia sin confirmar), dejarlo por escrito y agregar el aviso de que ningún texto de IA se publica sin revisión humana, sin cambiar el esquema.
+
+**Qué pasó:**
+- **Hueco encontrado en la regla anterior:** "2 fuentes que no sean IA" contaba dos artículos del mismo medio como 2 fuentes. Con "Prensa Libre" dos veces, la versión anterior del formulario mostraba "2 de 2" y dejaba confirmar (evidencia: `docs/evidencia/validacion-antes-mismo-medio-contaba-2.png`). Ahora dos fuentes son el mismo medio si coinciden en nombre (sin tildes ni mayúsculas) o en dominio de la URL, y para confirmar hacen falta 2 fuentes **distintas**.
+- **Diagnóstico en vivo** en la sección Validación: según las fuentes, muestra el caso (fuente insuficiente / fuentes que se contradicen / fuentes suficientes), bloquea los estados que no corresponden con su razón y sugiere qué escribir en la nota.
+- **Contradicción declarada por la persona** (no se detecta sin un modelo): casilla que deja la noticia en `in_progress`, exige 2 fuentes distintas y nota, y se guarda como prefijo `Fuentes contradictorias:` en `validationNote`. Así no se cambia el esquema y la app y el chat la muestran tal cual.
+- **Texto de IA:** aviso fijo "Ningún texto generado por IA se publica sin revisión humana"; si hay una fuente `ai`, publicar exige marcar que alguien revisó y editó ese texto (confirmación por guardado, no se guarda).
+- **Buscar en otros medios, $0:** enlaces a Google Noticias con el título, filtrado a una lista de medios de referencia del país más agencias internacionales (`apps/admin/lib/outlets.ts`). El portal no consulta nada por su cuenta; la persona lee y agrega la fuente. Si la URL de una fuente es de esa lista, se muestra "Medio de referencia" (que no la vuelve verdadera).
+- **Pruebas:** 9 nuevas (22 en total), todas pasan: mismo medio por nombre y por dominio, los tres casos del diagnóstico, contradicción guardada y recuperada como prefijo, revisión de IA, y reconocimiento de medios por dominio (sin falsos positivos como `prensalibre.com.fake.net`).
+
+**Un tropiezo en la prueba manual:** las primeras capturas mostraban la versión anterior del formulario aunque el servidor ya había compilado el código nuevo; la pestaña del navegador se había quedado con la versión vieja. Se resolvió con recarga forzada. Sirvió de evidencia del "antes": ahí se ve el hueco de las fuentes repetidas.
+
+**Prueba (localhost, 2026-10-10):** mismo medio dos veces → "no suma como segunda fuente", 1 de 2, Confirmada bloqueada; fuente de tipo IA → no cuenta y aparece la casilla de revisión; contradicción → En desarrollo, los otros estados bloqueados; Prensa Libre + La Hora → "Fuentes suficientes", Confirmada habilitada pero no marcada sola. Evidencia: `docs/evidencia/validacion-*.png`.
+
+**Qué se cambió y por qué:**
+- Se propuso validar veracidad contra otros medios o con IA. Como todavía no hay proveedor ni medidor de gasto (Rol 2 y Rol 5) y CLAUDE.md pide no llamar a un modelo si algo se resuelve sin él, se construyó la búsqueda manual de $0 y se dejó por escrito una **propuesta de asistente con IA** en `docs/validacion.md`. El modelo solo sugeriría enlaces y nunca contaría como prueba. Costo estimado con precios oficiales consultados hoy: ≈ USD 0,022 por consulta con Haiku 5.5 (lo dominan las búsquedas web, a USD 10 por 1.000). La justificación es el ciclo anterior de Rol 4, donde una verificación con IA dejó pasar 2 noticias que no se sostenían.
+- La "segunda revisión por otra persona" queda como propuesta: necesitaría un campo nuevo (quién revisó) en el esquema.
+
+**Pendiente:** presentar la propuesta de IA al equipo y a Rol 5. Siguiente rama: `rol3/imagen`.
