@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
+import { ProfileProvider } from "@/lib/profile";
+import { LocationGate } from "@/components/LocationGate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,7 +55,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="es" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <AuthProvider>
-          <AuthGate>{children}</AuthGate>
+          <AuthGate>
+            <ProfileProvider>
+              <LocationGate>{children}</LocationGate>
+            </ProfileProvider>
+          </AuthGate>
         </AuthProvider>
       </body>
     </html>

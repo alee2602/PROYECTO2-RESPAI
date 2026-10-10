@@ -1,6 +1,6 @@
 # Estado técnico del proyecto (qué ya existe, para no duplicar trabajo)
 
-Última actualización: 2026-10-09, por Rol 1 (login y PWA instalable en `apps/mobile`). Si algo de esto cambia, actualizar este documento en el mismo commit que el cambio.
+Última actualización: 2026-10-09, por Rol 1 (login, PWA instalable y ubicación simulada en `apps/mobile`). Si algo de esto cambia, actualizar este documento en el mismo commit que el cambio.
 
 ## Resumen
 
@@ -19,6 +19,7 @@
 | Noticias de prueba | Ya están en Firestore (12 documentos en la colección `news`) | Variedad completa: 3 alcances, 4 países, 7 temas, casos de validación distintos. Tabla completa en `scripts/seed-news/README.md`. No hace falta cargar más para desarrollar. |
 | Login con Google | `apps/admin/app/page.tsx` (ya implementado); `apps/mobile/lib/auth.tsx` + `apps/mobile/components/AuthGate.tsx` (ya implementado, Rol 1) | Método decidido: `signInWithPopup` (no redirect). Probado y funcionando en PWA instalada en iPhone real — evidencia en `docs/ciclos.md`, 2026-09-30. En `apps/mobile`, toda la app está detrás de `<AuthGate>` (en `app/layout.tsx`) con sesión persistente; para saber quién está logueado usar `useAuth()` / `useUser()` de `@/lib/auth`, no volver a llamar a `onAuthStateChanged`. |
 | PWA instalable (manifest, íconos, zonas seguras) | `apps/mobile/app/manifest.ts`, `apps/mobile/public/icons/`, `viewport`/`appleWebApp` en `apps/mobile/app/layout.tsx` | Instalable con "Añadir a pantalla de inicio" en iOS y Android. Íconos regenerables con `node scripts/generate-icons.mjs` (desde `apps/mobile`). Para respetar el notch y la barra inferior usar las variables CSS `--safe-top`/`--safe-bottom`/`--safe-left`/`--safe-right` de `globals.css`. Sin service worker por ahora (la app necesita red para Firestore de todos modos). |
+| Ubicación simulada del usuario | `apps/mobile/lib/locations.ts` (lista de países/regiones), `apps/mobile/lib/profile.tsx` (lee/escribe `users/{uid}`), pantalla `/ubicacion` | Se guarda en `users/{uid}` como `{ location: { country, region | null }, locationUpdatedAt }` (siempre con `merge: true`, así Rol 4 puede agregar otros campos sin chocar). `region: null` = "todo el país". Los textos de país/región coinciden exactamente con los de las noticias semilla; si el portal usa otros, hay que alinearlos en `locations.ts`. En la app, leerla con `useLocation()` / `useProfile()` de `@/lib/profile`. Nunca se usa GPS. |
 | Dónde vive el endpoint del chat | `apps/mobile/app/api/chat/` (carpeta todavía no creada, pero esa es la ruta) | Es una API route de Next.js, no un proyecto de Vercel aparte. La carpeta `/functions` que existía en Etapa 0 se eliminó. |
 
 ## Guía rápida por rol
