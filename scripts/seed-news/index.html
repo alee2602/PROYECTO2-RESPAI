@@ -12,11 +12,11 @@
 </head>
 <body>
   <h2>Cargar noticias semilla (Rol 4)</h2>
-  <p>Herramienta de un solo uso, no es parte de la app final. Escribe 12 noticias de ejemplo (ficticias) en la colección <code>news</code> de Firestore. Requiere iniciar sesión con una cuenta admin (ver <code>isAdmin()</code> en <code>/firestore.rules</code>).</p>
+  <p>Herramienta de un solo uso, no es parte de la app final. Escribe 12 noticias <strong>reales</strong> (verificadas con búsqueda web, ver fuentes en cada una) en la colección <code>news</code> de Firestore. Requiere iniciar sesión con una cuenta admin (ver <code>isAdmin()</code> en <code>/firestore.rules</code>).</p>
 
   <button id="btn-login">Entrar con Google</button>
-  <button id="btn-seed">Cargar 12 noticias semilla</button>
-  <button id="btn-fix">Corregir datos ya cargados (scope México/España/EE.UU. + fuente de Antigua)</button>
+  <button id="btn-delete-all">Borrar TODAS las noticias actuales (pide confirmación)</button>
+  <button id="btn-seed">Cargar 12 noticias semilla reales</button>
 
   <h3>Estado:</h3>
   <pre id="status">(sin acciones todavía)</pre>
@@ -29,7 +29,7 @@
       getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
-      getFirestore, collection, addDoc, getDocs, query, where, updateDoc, serverTimestamp
+      getFirestore, collection, addDoc, getDocs, deleteDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
     const app = initializeApp(window.FIREBASE_CONFIG);
@@ -48,161 +48,155 @@
       log(user ? "Sesión activa: " + user.email : "Sin sesión");
     });
 
-    // 12 noticias ficticias pero realistas. Variedad: 3 locales, 4 nacionales,
-    // 5 internacionales (4 países distintos); varios temas; al menos una sin
-    // imagen; 4 en estado distinto de "confirmed" (incluye un caso de fuentes
-    // contradictorias y uno de fuente única insuficiente).
-    const PLACEHOLDER_IMG = (seed) =>
-      `https://picsum.photos/seed/${seed}/800/450`;
-    const PLACEHOLDER_ATTR = "Foto de muestra (picsum.photos) — contenido de prueba, no corresponde al hecho real";
-
+    // 12 noticias REALES (decisión del profesor, ver docs/decisiones-pendientes.md
+    // y docs/ciclos.md, 2026-10-10). Verificadas con búsqueda web antes de usarlas
+    // — varias candidatas se descartaron por no poder confirmarse. Aun así,
+    // REVISAR cada link antes de publicar: esta verificación fue preliminar, no
+    // un chequeo editorial completo. Sin imágenes: para contenido real, usar una
+    // foto genérica como "libre con atribución" sería engañoso (no es foto del
+    // hecho); el origen real de imágenes lo resuelve el flujo del portal (Rol 3).
     const seedNews = [
       {
-        title: "Antigua Guatemala inaugura red de wifi público en el centro histórico",
-        summary: "La municipalidad instaló puntos de acceso gratuito en el parque central y calles aledañas.",
-        body: "La Municipalidad de Antigua Guatemala anunció la entrada en funcionamiento de una red de wifi público gratuito en el centro histórico, como parte de un plan de modernización de servicios turísticos. El servicio cubre el parque central y las calles principales.",
+        title: "CAIMI de Antigua Guatemala, sin avanzar por falta de participación municipal",
+        summary: "La mesa técnica del Codede de Sacatepéquez reporta que la municipalidad no asiste a las reuniones del proyecto.",
+        body: "La mesa técnica del Codede de Sacatepéquez, encargada de dar seguimiento al Centro de Atención Integral Materno Infantil (CAIMI) de Antigua Guatemala, reportó que la municipalidad no se ha presentado a las reuniones necesarias para destrabar la apertura del centro. El proyecto, financiado con fondos del Codede por Q6.4 millones, serviría a todo el departamento.",
         sources: [
-          { name: "Municipalidad de Antigua Guatemala (comunicado oficial)", type: "original" },
-          { name: "Prensa Libre", url: "https://www.prensalibre.com", type: "summary" }
-        ],
-        validationStatus: "confirmed",
-        scope: "local", country: "Guatemala", region: "Sacatepéquez",
-        topics: ["tecnología", "turismo"],
-        image: { url: PLACEHOLDER_IMG("antigua-wifi"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
-      },
-      {
-        title: "Vecinos de zona 10 reportan cortes de agua intermitentes",
-        summary: "Varios residentes denuncian cortes de agua sin aviso previo durante la última semana.",
-        body: "Vecinos de la zona 10 de la Ciudad de Guatemala reportaron cortes de agua intermitentes durante la última semana. Hasta el momento no hay una explicación oficial de la empresa municipal de agua.",
-        sources: [
-          { name: "Reportes de vecinos en redes sociales", type: "original" }
+          { name: "Agencia Guatemalteca de Noticias (AGN)", url: "https://agn.gt/caimi-de-antigua-guatemala-entrampado-y-sin-interes-municipal-en-resolver-procesos/", type: "original" }
         ],
         validationStatus: "unverified",
-        validationNote: "Solo hay reportes de vecinos, ninguna fuente oficial lo ha confirmado todavía. No se publica como confirmada hasta tener una segunda fuente.",
-        scope: "local", country: "Guatemala", region: "Ciudad de Guatemala",
-        topics: ["servicios públicos"]
+        validationNote: "Solo se encontró reportado por una fuente (AGN). No se pudo corroborar en otro medio independiente ni en un comunicado de la municipalidad.",
+        scope: "local", country: "Guatemala", region: "Sacatepéquez",
+        topics: ["salud", "servicios públicos"]
       },
       {
-        title: "Feria patronal de Quetzaltenango anuncia cartel de artistas",
-        summary: "La feria de diciembre contará con artistas nacionales e internacionales.",
-        body: "Los organizadores de la feria patronal de Quetzaltenango presentaron el cartel de artistas para la edición de este año, con presentaciones de música nacional e internacional.",
+        title: "Paso a desnivel de la calzada Roosevelt, listo para su apertura",
+        summary: "La obra vial en la Ciudad de Guatemala se preparaba para abrir a inicios de julio de 2026.",
+        body: "El paso a desnivel de la calzada Roosevelt, en la Ciudad de Guatemala, quedó terminado y en preparación para su apertura a inicios de julio de 2026, según medios locales. La obra busca aliviar el tránsito en uno de los corredores más transitados de la capital.",
         sources: [
-          { name: "Comité de Feria de Quetzaltenango", type: "original" }
+          { name: "Agencia Guatemalteca de Noticias (AGN)", type: "original" },
+          { name: "Prensa Libre", type: "summary" }
+        ],
+        validationStatus: "confirmed",
+        scope: "local", country: "Guatemala", region: "Ciudad de Guatemala",
+        topics: ["infraestructura"]
+      },
+      {
+        title: "Expoferia del Mueble reúne marcas de decoración en Quetzaltenango",
+        summary: "La quinta edición se realizó del 30 de septiembre al 4 de octubre en el Centro Intercultural de la zona 3.",
+        body: "La Expoferia del Mueble, en su quinta edición, reunió a marcas de muebles, decoración y amenidades en el Centro Intercultural de la zona 3 de Quetzaltenango, del 30 de septiembre al 4 de octubre de 2026.",
+        sources: [
+          { name: "La Voz de Xela", type: "original" }
         ],
         validationStatus: "confirmed",
         scope: "local", country: "Guatemala", region: "Quetzaltenango",
-        topics: ["cultura"],
-        image: { url: PLACEHOLDER_IMG("feria-xela"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+        topics: ["cultura", "comercio"]
       },
       {
-        title: "Banguat mantiene tasa de interés líder sin cambios",
-        summary: "Es el tercer mes consecutivo que la tasa se mantiene igual.",
-        body: "El Banco de Guatemala decidió mantener la tasa de interés líder sin cambios por tercer mes consecutivo, citando estabilidad en la inflación interanual.",
+        title: "Banguat proyecta crecimiento económico de 4.1% para Guatemala en 2026",
+        summary: "El presidente del banco central atribuye el impulso sobre todo a las remesas familiares.",
+        body: "El presidente del Banco de Guatemala, Álvaro González Ricci, proyectó un crecimiento económico del 4.1% para 2026, impulsado principalmente por las remesas familiares, que podrían alcanzar unos USD 27,000 millones al cierre del año. Las exportaciones crecerían cerca de 6%, y la inflación cerraría cerca del 3.75%, por debajo de la meta oficial.",
         sources: [
-          { name: "Banco de Guatemala (comunicado de política monetaria)", type: "original" }
+          { name: "Infobae Guatemala", url: "https://www.infobae.com/guatemala/2026/05/22/guatemala-proyecta-un-crecimiento-economico-del-41-en-2026-impulsada-por-las-remesas-familiares/", type: "original" }
         ],
         validationStatus: "confirmed",
         scope: "national", country: "Guatemala",
-        topics: ["economía", "finanzas"],
-        image: { url: PLACEHOLDER_IMG("banguat"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+        topics: ["economía"]
       },
       {
-        title: "Ministerio de Salud investiga brote de gastroenteritis en escuelas de Quetzaltenango",
-        summary: "Dos fuentes dan cifras distintas de casos reportados.",
-        body: "El Ministerio de Salud confirmó que investiga un posible brote de gastroenteritis en escuelas de Quetzaltenango. Una fuente del ministerio reporta 12 casos, mientras un medio local reporta 20. La cifra exacta sigue sin confirmarse.",
+        title: "Gobierno de Guatemala presenta tercera propuesta del año para subsidiar combustibles",
+        summary: "Tras un decreto en abril y una iniciativa en julio, en septiembre se propuso un tope de precio; no hay reporte de su aprobación final.",
+        body: "El presidente Bernardo Arévalo ha impulsado tres medidas distintas en 2026 para aliviar el precio de los combustibles: un subsidio temporal aprobado por decreto en abril, una nueva iniciativa de apoyo directo presentada al Congreso en julio, y una propuesta de precio máximo de diésel (Q39 por galón) en septiembre. No se encontró un reporte que confirme la aprobación final de esta última propuesta ni su entrada en vigor.",
         sources: [
-          { name: "Ministerio de Salud Pública (vocería)", type: "original" },
-          { name: "Medio local de Quetzaltenango", type: "summary" }
+          { name: "Revista E&N (Centroamérica & Mundo)", url: "https://www.revistaeyn.com/centroamericaymundo/guatemala-arevalo-presenta-proyecto-de-ley-de-apoyo-al-precio-de-combustibles-HG31510337", type: "original" },
+          { name: "Infobae Guatemala", url: "https://www.infobae.com/guatemala/2026/04/16/el-presidente-arevalo-asegura-que-subsidio-temporal-para-combustibles-sera-un-alivio-para-los-guatemaltecos/", type: "summary" }
         ],
         validationStatus: "in_progress",
-        validationNote: "Las fuentes se contradicen en el número de casos (12 vs. 20). Se espera un reporte oficial consolidado antes de confirmar.",
-        scope: "national", country: "Guatemala", region: "Quetzaltenango",
-        topics: ["salud"]
+        validationNote: "Hay tres anuncios sucesivos del Ejecutivo a lo largo del año, pero ninguna fuente confirma si la última propuesta (tope de Q39) fue aprobada o sigue en trámite.",
+        scope: "national", country: "Guatemala",
+        topics: ["economía", "política"]
       },
       {
-        title: "Selección femenina de Guatemala clasifica a torneo regional de fútbol",
-        summary: "El equipo aseguró su cupo tras vencer a Honduras en el repechaje.",
-        body: "La selección femenina de fútbol de Guatemala aseguró su clasificación al torneo regional tras una victoria 2-1 sobre Honduras en el partido de repechaje.",
+        title: "Temporada de lluvias 2026 deja 13 muertos y más de 33,000 personas afectadas",
+        summary: "Conred declaró alerta anaranjada por la tormenta tropical Cristina; Alta Verapaz es el departamento con más emergencias.",
+        body: "La temporada de lluvias de 2026 dejó, hasta mediados de julio, 13 muertes y más de 33,000 personas afectadas en Guatemala. Conred declaró alerta anaranjada por la tormenta tropical Cristina, y las lluvias elevaron la saturación del suelo en 11 municipios, con cuatro ríos superando el nivel de alerta. Alta Verapaz encabeza la lista de departamentos con más emergencias atendidas.",
         sources: [
-          { name: "Federación Nacional de Fútbol de Guatemala", type: "original" }
+          { name: "Conred", type: "original" },
+          { name: "Prensa Libre", type: "summary" }
         ],
         validationStatus: "confirmed",
         scope: "national", country: "Guatemala",
-        topics: ["deportes"]
+        topics: ["clima"]
       },
       {
-        title: "Congreso discute reforma a ley de contrataciones; bancadas difieren sobre su alcance",
-        summary: "Dos bancadas dan versiones distintas de qué cambiaría la reforma.",
-        body: "El Congreso de Guatemala inició la discusión de una reforma a la ley de contrataciones del Estado. Una bancada asegura que la reforma solo afecta montos mínimos, mientras otra sostiene que también cambia los plazos de adjudicación. No hay texto oficial publicado todavía.",
+        title: "Vicepresidenta destaca la importancia de preparar a Guatemala ante el avance de la inteligencia artificial",
+        summary: "Karin Herrera habló como presidenta del Concyt en el segundo foro HumanIA, realizado en Quetzaltenango.",
+        body: "La vicepresidenta Karin Herrera, como presidenta del Consejo Nacional de Ciencia y Tecnología (Concyt), señaló en el segundo foro HumanIA que Guatemala debe construir capacidad para beneficiarse de la inteligencia artificial sin que su adopción amplíe las brechas existentes. Destacó los Clubes de Ciencias, presentes en los 22 departamentos, y reportó que el país aplica la metodología de evaluación de preparación (RAM) de la UNESCO para IA, que orientará decisiones sobre conectividad, protección de datos, investigación, talento e inversión.",
         sources: [
-          { name: "Bancada A (declaración pública)", type: "original" },
-          { name: "Bancada B (declaración pública)", type: "original" }
-        ],
-        validationStatus: "in_progress",
-        validationNote: "Dos fuentes oficiales (ambas bancadas) se contradicen sobre el alcance real de la reforma. Se espera el texto oficial del Congreso antes de confirmar cualquier detalle.",
-        scope: "national", country: "Guatemala",
-        topics: ["política"]
-      },
-      {
-        title: "México anuncia plan nacional de datos abiertos para dependencias federales",
-        summary: "El plan busca publicar datasets de uso público antes de fin de año.",
-        body: "El gobierno de México presentó un plan nacional de datos abiertos que obligará a las dependencias federales a publicar datasets de uso público antes de fin de año, como parte de una política de transparencia.",
-        sources: [
-          { name: "Gobierno de México (comunicado oficial)", type: "original" },
-          { name: "Resumen generado para este chat a partir del comunicado oficial", type: "ai" }
+          { name: "Agencia Guatemalteca de Noticias (AGN)", url: "https://agn.gt/?p=565671", type: "original" }
         ],
         validationStatus: "confirmed",
-        scope: "national", country: "México",
-        topics: ["tecnología", "gobierno"],
-        image: { url: PLACEHOLDER_IMG("mexico-datos"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+        scope: "national", country: "Guatemala",
+        topics: ["tecnología", "educación"]
       },
       {
-        title: "España registra ola de calor histórica en el sur del país",
-        summary: "Las autoridades emitieron alertas en varias provincias de Andalucía.",
-        body: "España registró una ola de calor histórica en el sur del país, con temperaturas que superaron los 44°C en varias provincias de Andalucía. Las autoridades emitieron alertas sanitarias.",
+        title: "Pedro Sánchez adelanta las elecciones generales de España al 29 de noviembre",
+        summary: "El anuncio llegó tras el rechazo del Congreso a dos decretos del Gobierno sobre la crisis de la vivienda.",
+        body: "El presidente del Gobierno, Pedro Sánchez, anunció la disolución de las Cortes y la convocatoria de elecciones generales anticipadas para el 29 de noviembre de 2026, nueve meses antes del final previsto de la legislatura. El anuncio se dio tras una derrota parlamentaria: el Congreso rechazó dos decretos del Gobierno para afrontar la crisis de la vivienda, con los votos en contra de PP, Vox y Junts.",
         sources: [
-          { name: "Agencia Estatal de Meteorología (AEMET)", type: "original" }
+          { name: "CRHoy (vía AFP)", url: "https://crhoy.com/mundo/pedro-sanchez-adelanta-elecciones-en-espana-para-el-29-de-noviembre/", type: "summary" }
         ],
         validationStatus: "confirmed",
         scope: "national", country: "España",
-        topics: ["clima"],
-        image: { url: PLACEHOLDER_IMG("espana-calor"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+        topics: ["política"]
       },
       {
-        title: "Reportes no confirmados sobre nueva política de privacidad de una gran tecnológica",
-        summary: "Una sola fuente sin nombre asegura el cambio; la empresa no se ha pronunciado.",
-        body: "Circulan reportes no confirmados sobre una posible nueva política de privacidad de una gran empresa tecnológica en Estados Unidos. La fuente es anónima y la empresa no ha hecho ninguna declaración oficial al respecto.",
+        title: "Sheinbaum presenta el Olinia 1, primer minivehículo eléctrico diseñado y fabricado en México",
+        summary: "El prototipo, desarrollado con jóvenes del IPN y el TecNM, se venderá desde 150 mil pesos.",
+        body: "La presidenta Claudia Sheinbaum presentó el 7 de junio de 2026 el Olinia 1, un minivehículo eléctrico compacto con capacidad para hasta seis pasajeros y adaptado para personas en silla de ruedas. El proyecto, liderado por Roberto Capuano, tomó unos 18 meses y participaron jóvenes de instituciones públicas como el IPN y el TecNM. Se venderá desde 150 mil pesos, con las primeras entregas previstas para el verano de 2027.",
         sources: [
-          { name: "Fuente anónima citada por un blog especializado", type: "summary" }
+          { name: "Zeta Tijuana", url: "https://zetatijuana.com/2026/06/sheinbaum-presenta-olinia-el-primer-minivehiculo-electrico-disenado-y-fabricado-en-mexico/", type: "original" },
+          { name: "Forbes México", type: "summary" }
         ],
-        validationStatus: "unverified",
-        validationNote: "Una sola fuente, anónima, sin declaración oficial de la empresa involucrada. No se puede confirmar con esta evidencia.",
-        scope: "national", country: "Estados Unidos",
+        validationStatus: "confirmed",
+        scope: "national", country: "México",
         topics: ["tecnología"]
       },
       {
-        title: "Precio internacional del café sube por segunda semana consecutiva",
-        summary: "Analistas atribuyen el alza a condiciones climáticas en zonas productoras.",
-        body: "El precio internacional del café subió por segunda semana consecutiva en los mercados globales, lo que analistas atribuyen a condiciones climáticas adversas en varias zonas productoras de Centro y Sudamérica.",
+        title: "Trump condecora a la tripulación de Artemis II con la máxima medalla espacial de EE. UU.",
+        summary: "Los cuatro astronautas recibieron la Medalla de Honor Espacial del Congreso tras su sobrevuelo lunar.",
+        body: "El presidente Donald Trump entregó el 28 de agosto de 2026 la Medalla de Honor Espacial del Congreso a los cuatro astronautas de la misión Artemis II: Reid Wiseman, Victor Glover, Christina Koch y Jeremy Hansen (Agencia Espacial Canadiense), en una ceremonia en el Centro Espacial Johnson, en Houston. La misión despegó el 1 de abril de 2026, sobrevoló la Luna y regresó a la Tierra el 10 de abril, alcanzando 252,756 millas de distancia, un nuevo récord humano.",
         sources: [
-          { name: "Organización Internacional del Café (reporte semanal)", type: "original" }
+          { name: "El Español", url: "https://www.elespanol.com/mundo/20260823/tripulacion-artemis-ii-recibira-maxima-condecoracion-eeuu-solo-astronautas/1003744360782_0.html", type: "original" },
+          { name: "UnoTV", type: "summary" }
+        ],
+        validationStatus: "confirmed",
+        scope: "national", country: "Estados Unidos",
+        topics: ["tecnología", "ciencia"]
+      },
+      {
+        title: "El Banco Central de Argentina y Goldman Sachs bajan su proyección de crecimiento para 2026",
+        summary: "Ambos ubican el crecimiento en 2.7%, por debajo de sus propias estimaciones anteriores (3%).",
+        body: "La actividad económica de Argentina creció 0.8% en junio frente a mayo, por encima de lo esperado por analistas, pero la encuesta de julio del Banco Central bajó su proyección de crecimiento para 2026 a 2.7%, frente al 3% que preveía en junio. De forma independiente, Goldman Sachs también recortó su estimación de crecimiento para 2026 de 3% a 2.7% a finales de julio.",
+        sources: [
+          { name: "Buenos Aires Times (vía Bloomberg)", url: "https://batimes.com.ar/news/economy/argentinas-economy-expanded-faster-than-expected-in-june.phtml", type: "original" },
+          { name: "MercoPress", url: "https://en.mercopress.com/2026/07/25/goldman-sachs-cuts-argentina-s-growth-forecast-to-2.7-and-looks-ahead-to-the-elections/comments", type: "summary" }
+        ],
+        validationStatus: "in_progress",
+        validationNote: "Dos fuentes independientes (Banco Central y Goldman Sachs) coinciden en que el crecimiento fue revisado a la baja, pero ninguna confirma la cifra final de cierre de año.",
+        scope: "national", country: "Argentina",
+        topics: ["economía"]
+      },
+      {
+        title: "Precios internacionales del café caen cerca de 20% en 2026 ante expectativa de mayor oferta",
+        summary: "La Organización Internacional del Café reporta descensos mensuales, con una recuperación puntual en junio.",
+        body: "Los precios internacionales del café cayeron casi 20% a lo largo de 2026, según datos de la Organización Internacional del Café (OIC). El indicador compuesto pasó de 267.57 centavos de dólar por libra en febrero a 248.90 en junio, con un mínimo de casi dos años (231.96 centavos) el 9 de junio, seguido de una recuperación de 17.4% hacia fin de mes. Rabobank estima que la producción mundial alcanzará un récord de 180 millones de sacas en la cosecha 2026/27, lo que explicaría la presión a la baja.",
+        sources: [
+          { name: "Organización Internacional del Café (OIC)", type: "original" },
+          { name: "Bloomberg Línea", url: "https://bloomberglinea.com/mercados/los-precios-del-cafe-caen-casi-20-en-2026-mientras-el-mercado-anticipa-mas-oferta/", type: "summary" }
         ],
         validationStatus: "confirmed",
         scope: "international",
-        topics: ["economía"],
-        image: { url: PLACEHOLDER_IMG("cafe-precio"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
-      },
-      {
-        title: "Argentina confirma sede para el próximo campeonato sudamericano de atletismo",
-        summary: "El evento se realizará en Buenos Aires el próximo año.",
-        body: "La federación sudamericana de atletismo confirmó a Buenos Aires, Argentina, como sede del próximo campeonato sudamericano, que reunirá a atletas de toda la región.",
-        sources: [
-          { name: "Confederación Sudamericana de Atletismo", type: "original" }
-        ],
-        validationStatus: "confirmed",
-        scope: "international", country: "Argentina",
-        topics: ["deportes"],
-        image: { url: PLACEHOLDER_IMG("argentina-atletismo"), origin: "free_attributed", attribution: PLACEHOLDER_ATTR }
+        topics: ["economía"]
       }
     ];
 
@@ -227,50 +221,25 @@
       log(`Listo: ${ok} creadas, ${fail} fallidas.`);
     };
 
-    // Corrige documentos que ya están en Firestore (cargados antes de este
-    // arreglo), buscándolos por título exacto. No crea duplicados.
-    const fixes = [
-      {
-        title: "México anuncia plan nacional de datos abiertos para dependencias federales",
-        patch: { scope: "national" },
-      },
-      {
-        title: "España registra ola de calor histórica en el sur del país",
-        patch: { scope: "national" },
-      },
-      {
-        title: "Reportes no confirmados sobre nueva política de privacidad de una gran tecnológica",
-        patch: { scope: "national" },
-      },
-      {
-        title: "Antigua Guatemala inaugura red de wifi público en el centro histórico",
-        patch: {
-          sources: [
-            { name: "Municipalidad de Antigua Guatemala (comunicado oficial)", type: "original" },
-            { name: "Medio local de Antigua Guatemala", type: "summary" },
-          ],
-        },
-      },
-    ];
-
-    document.getElementById("btn-fix").onclick = async () => {
+    // Borra TODO lo que haya en "news" (las 12 ficticias viejas, o cualquier
+    // prueba previa). Pide confirmación porque no se puede deshacer.
+    document.getElementById("btn-delete-all").onclick = async () => {
       if (!auth.currentUser) { log("Primero inicia sesión."); return; }
-      log(`Buscando ${fixes.length} documentos para corregir...`);
-      let ok = 0, missing = 0, fail = 0;
-      for (const f of fixes) {
+      const snap = await getDocs(collection(db, "news"));
+      if (snap.empty) { log("La colección 'news' ya está vacía."); return; }
+      const ok = confirm(`Esto borra ${snap.size} noticia(s) de Firestore de forma permanente. ¿Continuar?`);
+      if (!ok) { log("Cancelado."); return; }
+      let deleted = 0, fail = 0;
+      for (const d of snap.docs) {
         try {
-          const snap = await getDocs(query(collection(db, "news"), where("title", "==", f.title)));
-          if (snap.empty) { missing++; log(`No encontrado: "${f.title}"`); continue; }
-          for (const d of snap.docs) {
-            await updateDoc(d.ref, f.patch);
-            ok++;
-          }
+          await deleteDoc(d.ref);
+          deleted++;
         } catch (e) {
           fail++;
-          log(`FALLÓ "${f.title}": ${e.code}`);
+          log(`FALLÓ borrar "${d.id}": ${e.code}`);
         }
       }
-      log(`Listo: ${ok} corregidas, ${missing} no encontradas, ${fail} fallidas.`);
+      log(`Listo: ${deleted} borradas, ${fail} fallidas.`);
     };
   </script>
 </body>

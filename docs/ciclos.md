@@ -227,3 +227,34 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** se desactivaron ambas banderas en `next.config.ts`. Se verificó con `npm run build`: la ruta `/noticia/[id]` pasó de "Partial Prerender" a "Dynamic", confirmando que el cache agresivo ya no aplica.
 
 **Pendiente:** la usuaria debe reiniciar `npm run dev` (los cambios en `next.config.ts` no se recargan solos) y probar de nuevo cambiando de ubicación, para confirmar que el feed ya se actualiza sin refrescar manualmente.
+
+## 2026-10-10 — Las noticias semilla pasan de ficticias a reales (decisión del profesor)
+
+**Se esperaba:** que mantener las noticias ficticias fuera una decisión de diseño razonable y defendible (ver ciclo del 30 de septiembre).
+
+**Qué pasó:** el equipo le preguntó directamente al catedrático si las noticias debían basarse en hechos reales o podían ser ficticias. Respuesta: parte de los requerimientos exige validar la veracidad de las noticias contra otros medios confiables — lo cual solo tiene sentido con contenido real. Se descarta la decisión anterior.
+
+**Qué se cambió:**
+- Se buscaron y verificaron (con búsqueda web) 12 noticias reales, cubriendo exactamente las mismas regiones/países que usa `apps/mobile/lib/locations.ts` (Guatemala: Ciudad de Guatemala, Sacatepéquez, Quetzaltenango; más México, España, Estados Unidos, Argentina).
+- Varias candidatas iniciales **no pasaron la verificación** y se descartaron: un supuesto fallo judicial mexicano contra Meta (no se encontró el artículo real), una contradicción Banguat-CEPAL (la cifra de CEPAL no se pudo confirmar). Varios intentos de encontrar un caso real de "rumor sin confirmar" tampoco dieron resultado — los medios confiables rara vez publican rumores de forma prominente, y varias páginas tenían fechas inconsistentes (artículos viejos de 2015-2023 apareciendo marcados como 2026).
+- En su lugar, se encontraron dos casos **reales** de validación distinta de "confirmed": uno de fuente única (CAIMI de Antigua Guatemala, solo reportado por AGN) y uno de fuentes contradictorias genuino (pronósticos de crecimiento de Argentina: FMI 4%, Goldman Sachs 2.7%, OCDE 2.6%).
+- `scripts/seed-news/index.html` se reescribió con las 12 noticias reales (con fuentes y, donde fue posible, links directos al artículo). Se quitaron las imágenes placeholder: para contenido real, una foto genérica como "libre con atribución" sería engañosa. Se agregó un botón "Borrar TODAS las noticias actuales" (con confirmación) para reemplazar limpiamente las 12 ficticias viejas, y se quitó el botón de "corregir datos" anterior (ya no aplica).
+- `docs/decisiones-pendientes.md` y `scripts/seed-news/README.md` actualizados.
+
+**Qué se cambió y por qué:** esto corrige una decisión tomada el 30 de septiembre con buena lógica pero sin consultar al profesor — en retrospectiva, "validar veracidad contra otros medios" solo tiene sentido con hechos reales, algo que no se tuvo tan claro al principio. Buen ejemplo de ciclo real de ingeniería: hipótesis razonable → nueva evidencia (respuesta del profesor) → se corrige.
+
+**Pendiente:** correr "Borrar TODAS las noticias actuales" + "Cargar 12 noticias semilla reales" en la herramienta desplegada; el equipo debe revisar los links de las fuentes antes de usarlas en la demo real (verificación fue preliminar, hecha por IA con búsqueda web, no un chequeo editorial humano completo).
+
+## 2026-10-10 — Verificación profunda encuentra 2 errores en el primer set de noticias reales
+
+**Se esperaba:** que el primer set de 12 noticias reales (ciclo anterior) ya estuviera listo, basado en resúmenes de búsqueda web.
+
+**Qué pasó:** al profundizar (abriendo cada artículo completo en vez de confiar en el resumen de la búsqueda), se encontraron 2 errores reales:
+- La noticia "AGN alerta sobre videos falsos de funcionarios" resultó ser una campaña de **2021-2022**, no un hecho nuevo de 2026 — la fecha que parecía reciente era de cuándo se capturó la página web, no de publicación.
+- La noticia de Argentina afirmaba que el FMI proyectaba 4% y la OCDE 2.6% — al abrir las fuentes citadas, ninguna de las dos cifras aparecía en ningún lado. Solo se pudo confirmar que el Banco Central de Argentina y Goldman Sachs, por separado, bajaron su proyección a 2.7%.
+
+**Qué se cambió y por qué:** se reemplazó la noticia de videos falsos por una verificada de verdad (vicepresidenta Karin Herrera sobre preparación ante la IA, foro HumanIA, confirmada con fecha y cita textual). Se reescribió la de Argentina para afirmar solo lo que las fuentes realmente dicen.
+
+**Por qué importa:** esto demuestra en la práctica por qué "verificación preliminar con resúmenes de búsqueda" no es lo mismo que "verificación completa" — 2 de ~11 noticias revisadas a fondo no se sostuvieron tal como se habían presentado inicialmente. Es evidencia concreta de por qué el chequeo editorial humano sigue siendo necesario antes de usar esto en la demo real, incluso después de que una IA haga una primera pasada de investigación.
+
+**Pendiente:** el equipo debe revisar los links de las 10 noticias restantes que no se abrieron una por una a fondo (solo se verificaron en detalle: CAIMI Antigua, Banguat, Arévalo combustibles, Artemis II, Olinia, Argentina, HumanIA/IA — 7 de 12). Las que faltan por abrir a fondo: Roosevelt (Ciudad de Guatemala), Expoferia del Mueble (Quetzaltenango), lluvias/Conred, elecciones España, café internacional.
