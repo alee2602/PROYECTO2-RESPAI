@@ -1464,6 +1464,336 @@ h3 {
   line-height: 1.1;
 }
 
+/* ---- Lector de noticia (app/noticia/[id]) ---- */
+
+.reader {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 16px var(--gutter) calc(40px + var(--safe-bottom));
+}
+
+.article {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.article-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.article-media {
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius);
+}
+
+.article-media.media-placeholder {
+  aspect-ratio: 16 / 7;
+}
+
+.article-figure figcaption {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.article-figure figcaption strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.article-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.article-kicker {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.article-title {
+  font-size: clamp(28px, 7.6vw, 40px);
+  line-height: 1.1;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.article-lead {
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.article-date {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Panel de verificación (components/VerificationPanel.tsx) */
+.verify {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 16px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.verify-confirmed {
+  --status: var(--confirmed);
+  --status-bg: var(--confirmed-bg);
+}
+
+.verify-in_progress {
+  --status: var(--progress);
+  --status-bg: var(--progress-bg);
+}
+
+.verify-unverified {
+  --status: var(--unverified);
+  --status-bg: var(--unverified-bg);
+}
+
+.verify-eyebrow {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Regla de 3 pasos: línea gris de fondo + tramo de color hasta el estado actual.
+   Los puntos están centrados en columnas iguales (1/6, 3/6, 5/6 del ancho). */
+.verify-track {
+  --progress: 0;
+  position: relative;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-top: 4px;
+}
+
+.verify-track::before,
+.verify-track::after {
+  content: "";
+  position: absolute;
+  top: 11px;
+  left: calc(100% / 6);
+  height: 3px;
+  border-radius: 3px;
+}
+
+.verify-track::before {
+  width: calc(100% * 4 / 6);
+  background: var(--surface-2);
+}
+
+.verify-track::after {
+  width: calc(100% * 4 / 6 * var(--progress));
+  background: var(--status);
+  animation: track-grow 0.7s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: left center;
+}
+
+@keyframes track-grow {
+  from {
+    scale: 0 1;
+  }
+}
+
+.verify-track li {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.verify-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+}
+
+.is-past .verify-dot {
+  background: var(--status);
+  border-color: var(--status);
+}
+
+.is-current .verify-dot {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  background: var(--status);
+  border: 0;
+  box-shadow: 0 0 0 5px var(--status-bg);
+  animation: dot-pop 0.35s 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+@keyframes dot-pop {
+  from {
+    scale: 0.4;
+  }
+}
+
+.verify-step {
+  font-size: 12.5px;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+.is-current .verify-step {
+  color: var(--status);
+  font-weight: 700;
+}
+
+.verify-status {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.verify-status strong {
+  color: var(--status);
+}
+
+/* Nota editorial como cita */
+.verify-note {
+  position: relative;
+  padding: 4px 0 0 30px;
+}
+
+.verify-note::before {
+  content: "\201C";
+  position: absolute;
+  left: 0;
+  top: -10px;
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--status);
+}
+
+.verify-note p {
+  font-size: 15px;
+  line-height: 1.55;
+  font-style: italic;
+}
+
+.verify-note cite {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.verify-note cite::before {
+  content: "— ";
+}
+
+.verify-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.article-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 17.5px;
+  line-height: 1.7;
+}
+
+.article-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1.5px solid var(--ink);
+}
+
+.article-sources h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.article-sources ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.article-sources li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.article-source-name {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.article-source-name a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.article-source-name a svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.article-ai-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ai-bg);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.article-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.article-foot .card-reason {
+  border-top: 0;
+  padding-top: 0;
+}
+
 /* ---- Estados ---- */
 
 .state-box {
