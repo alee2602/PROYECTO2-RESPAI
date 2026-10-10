@@ -7,8 +7,9 @@ import type { News } from "@respai/shared"
 import { fetchNewsById, newsDate } from "@/lib/news"
 import { reasonFor } from "@/lib/feed"
 import { useLocation } from "@/lib/profile"
-import { IMAGE_ORIGIN_LABEL, SCOPE_LABEL, VALIDATION_HINT, VALIDATION_LABEL } from "@/lib/labels"
-import { SourceTypeBadge, ValidationBadge } from "@/components/Badges"
+import { IMAGE_ORIGIN_LABEL, SCOPE_LABEL } from "@/lib/labels"
+import { SourceTypeBadge } from "@/components/Badges"
+import { VerificationPanel } from "@/components/VerificationPanel"
 import { NewsImage } from "@/components/NewsImage"
 import { TopBar } from "@/components/TopBar"
 
@@ -97,21 +98,7 @@ function Article({ news, reason }: { news: News; reason: string }) {
         </p>
       </header>
 
-      <section className={`validation-box validation-${news.validationStatus}`} aria-labelledby="h-validation">
-        <div className="validation-box-head">
-          <ValidationBadge status={news.validationStatus} />
-          <h2 id="h-validation" className="visually-hidden">
-            Estado de validación: {VALIDATION_LABEL[news.validationStatus]}
-          </h2>
-        </div>
-        <p>{VALIDATION_HINT[news.validationStatus]}</p>
-        {news.validationNote && (
-          <p className="validation-note">
-            <strong>Nota del equipo editorial:</strong> {news.validationNote}
-          </p>
-        )}
-        <p className="validation-who">El estado lo decide una persona del equipo editorial, no la IA.</p>
-      </section>
+      <VerificationPanel status={news.validationStatus} note={news.validationNote} />
 
       <div className="article-body">
         {news.body.split(/\n{2,}/).map((p, i) => (
