@@ -1,6 +1,7 @@
 import type { News } from "@respai/shared"
 import type { UserLocation } from "@/lib/locations"
 import { newsDate } from "@/lib/news"
+import { rankNewsByLocation } from "@/lib/ranking"
 
 // ---------------------------------------------------------------------------
 // Punto de integración con Rol 4 (ranking + anti-burbuja).
@@ -75,5 +76,22 @@ export const fallbackFeed: RankFn = (news, location) => {
   }))
 }
 
-// Lo que usa la pantalla del feed. Cambiar aquí cuando exista el ranking de Rol 4.
-export const rankFeed: RankFn = fallbackFeed
+// Ranking real de Rol 4 (Etapa 1): ubicación + recencia + protección
+// anti-burbuja. La lógica de puntaje/orden vive en lib/ranking.ts (sin
+// depender de este archivo, para evitar un import circular); aquí solo se
+// arma el FeedItem[] con prominencia y explicación.
+// `fallbackFeed` se deja exportado como referencia/respaldo, ya no se usa.
+export const rankFeed: RankFn = (news, location) => {
+  const { items, protectedIds } = rankNewsByLocation(news, location)
+  return items.map((n, i): FeedItem => {
+    const isProtected = protectedIds.has(n.id)
+    return {
+      news: n,
+      prominence: prominenceByPosition(i),
+      reason: isProtected
+        ? `${reasonFor(n, location)} · parte de la mezcla de alcances de tu feed`
+        : reasonFor(n, location),
+      ...(isProtected ? { protectedByDiversity: true } : {}),
+    }
+  })
+}

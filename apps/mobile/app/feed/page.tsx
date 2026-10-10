@@ -103,8 +103,9 @@ export default function FeedPage() {
             <footer className="feed-footnote">
               <p>
                 <strong>Cómo se ordena este feed:</strong> primero lo más cercano a tu ubicación simulada y lo más
-                reciente. No se esconde ninguna noticia: las de otros países y alcances siguen aquí abajo. Orden
-                provisional sin IA, mientras se integra el ranking del equipo.
+                reciente. No se esconde ninguna noticia: las de otros países y alcances siguen aquí abajo. Siempre se
+                mezcla al menos una noticia local, nacional e internacional arriba, aunque no coincidan con tu
+                ubicación.
               </p>
               {data && data.hidden > 0 && (
                 <p>
