@@ -154,3 +154,29 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** el diseño original tenía un bug real de lógica (no de sintaxis ni de tipos) que ni el build ni el typecheck hubieran detectado — exactamente el tipo de error para el que sirven las pruebas automáticas que pedía el criterio de aceptación del rol ("pruebas que demuestren que una noticia importante no desaparece por ubicación o preferencias").
 
 **Pendiente:** afinidad por tema a partir de señales de comportamiento (`docs/senales.md`), sin desplazar el piso anti-burbuja — Etapa 3. Abrir PR en rama `rol4/ranking-ubicacion` y conseguir aprobación de alguien del equipo (branch protection activo desde el 2026-10-09).
+
+## 2026-10-10 — Desempate por validación en el ranking (encontrado probando con datos reales)
+
+**Se esperaba:** que la decisión original de "la validación nunca afecta el orden" fuera suficiente.
+
+**Qué pasó:** probando la app desplegada en Vercel con las 12 noticias reales y la ubicación "California, Estados Unidos", la noticia hero resultó ser la única de fuente única sin confirmar ("Reportes no confirmados sobre nueva política de privacidad..."), porque era la única noticia con `country: "Estados Unidos"` — ganó por cercanía sin ninguna competencia, no por ser importante. La usuaria lo notó directamente en la app desplegada, no en una prueba.
+
+**Qué se cambió y por qué:** se agregó un desempate secundario en `apps/mobile/lib/ranking.ts`: entre noticias con el mismo puntaje de cercanía, gana la más confirmada (`confirmed` > `in_progress` > `unverified`). Esto **no** es un filtro — una noticia no verificada sigue apareciendo siempre que exista en el pool, solo deja de ganarle a algo igual de relevante y mejor sustentado por pura casualidad. Se agregó una quinta prueba automática (`ranking.test.ts`) que reproduce exactamente este caso.
+
+**Pendiente:** ninguno nuevo — la rama `rol4/ranking-ubicacion` sigue abierta, este cambio se suma al mismo PR antes de que lo aprueben.
+
+## 2026-10-10 — La etiqueta Local/Nacional/Internacional pasa a ser relativa al usuario
+
+**Se esperaba:** que `scope` (el dato guardado en cada noticia) fuera suficiente para mostrar directamente en la tarjeta.
+
+**Qué pasó:** la usuaria, probando la app desplegada con ubicación "California, Estados Unidos", notó que una noticia de EE.UU. decía "Internacional" y una de Guatemala decía "Nacional" — al revés de lo intuitivo para alguien ubicado en EE.UU. Al indagar, el primer intento de arreglo (cambiar el dato guardado de México/España/EE.UU. de `international` a `national`) tampoco la convenció. La pregunta correcta resultó ser otra: como el usuario puede cambiar de ubicación simulada en cualquier momento, la etiqueta visible **tiene que cambiar con él** — la misma noticia de España debe verse "Nacional" si simulas estar en España, e "Internacional" si simulas estar en cualquier otro país.
+
+**Qué se cambió:**
+- `scope` (el dato guardado) se queda como estaba: describe el alcance propio de la noticia, lo sigue usando el ranking para la protección anti-burbuja.
+- Se agregó `displayScope(noticia, ubicación)` en `apps/mobile/lib/ranking.ts` (módulo puro, mismo criterio que el resto): calcula la etiqueta a mostrar comparando el país/región de la noticia contra la ubicación actual del usuario. `FeedItem` ahora incluye `displayScope`; `NewsCard` y el lector (`noticia/[id]`) lo usan en vez del dato crudo.
+- 3 pruebas automáticas nuevas (8 en total en `ranking.test.ts`), incluyendo el caso exacto de España visto desde España/Guatemala/EE.UU.
+- Además, se corrigieron 3 noticias semilla que tenían `scope: "international"` cuando su alcance propio real es `national` (México, España, EE.UU. — cada una es noticia doméstica de su propio país). Se agregó un botón "Corregir datos ya cargados" en `scripts/seed-news/index.html` para parchar los documentos que ya estaban en Firestore sin crear duplicados.
+
+**Por qué importa:** esto es relevancia personalizada de verdad — la misma noticia, vista distinto según quién la ve, sin usar ningún modelo. Buen ejemplo para la sección de arquitectura y decisiones de la demo.
+
+**Pendiente:** correr el botón "Corregir datos ya cargados" en la app desplegada (la usuaria lo hará); verificar visualmente con `npm run dev` cambiando de ubicación entre Guatemala/España/EE.UU.

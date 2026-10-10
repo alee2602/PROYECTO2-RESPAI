@@ -13,6 +13,8 @@ Herramienta de un solo uso (no es parte de la app final): un HTML suelto que, co
 
 Se puede correr más de una vez — no hay chequeo de duplicados, así que si se corre dos veces quedan 24 noticias. Para limpiar, borrar manualmente desde Firebase Console → Firestore → colección `news`.
 
+Si ya habías corrido "Cargar 12 noticias semilla" antes del 2026-10-10, corre también **"Corregir datos ya cargados"** — arregla 3 noticias que tenían `scope: "international"` cuando debían ser `national` (ver abajo), y la fuente de la noticia de Antigua, que apuntaba por error a un link real de Prensa Libre. Busca por título exacto y actualiza, no crea duplicados.
+
 ## Qué incluye (variedad exigida por el Rol 4 en `docs/decisiones-pendientes.md`)
 
 | # | Título | Alcance | País | Temas | Estado | Imagen |

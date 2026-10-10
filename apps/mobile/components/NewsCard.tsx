@@ -9,8 +9,8 @@ import { NewsImage } from "@/components/NewsImage"
 // prominencia del FeedItem. Toda tarjeta muestra SIEMPRE: estado de
 // validación, procedencia (primera fuente + tipo) y por qué aparece.
 export function NewsCard({ item, rank }: { item: FeedItem; rank: number }) {
-  const { news, prominence, reason, protectedByDiversity } = item
-  const kicker = [SCOPE_LABEL[news.scope], news.region ?? news.country].filter(Boolean).join(" · ")
+  const { news, prominence, reason, protectedByDiversity, displayScope } = item
+  const kicker = [SCOPE_LABEL[displayScope], news.region ?? news.country].filter(Boolean).join(" · ")
   const showImage = prominence !== "compact"
   const showSummary = prominence === "hero" || prominence === "large"
 
