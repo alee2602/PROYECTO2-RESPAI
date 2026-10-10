@@ -1,5 +1,6 @@
 import { deleteField, serverTimestamp, type FieldValue } from "firebase/firestore"
 import type { News } from "@respai/shared"
+import type { ImageOrigin } from "./images.ts"
 
 // Reglas del formulario de noticia, sin UI, para poder probarlas y reusarlas
 // al crear y al editar. El flujo de validación completo está explicado en
@@ -9,6 +10,8 @@ export type SourceType = News["sources"][number]["type"]
 const SOURCE_TYPE_VALUES = ["original", "summary", "ai"] as const satisfies readonly SourceType[]
 
 export type DraftSource = { name: string; url: string; type: SourceType }
+export type DraftImage = { url: string; origin: ImageOrigin; attribution: string }
+const IMAGE_ORIGIN_VALUES = ["real_photo", "free_attributed", "ai_generated"] as const satisfies readonly ImageOrigin[]
 
 // Estado del formulario: todo como texto, tal cual lo escribe la persona.
 export type NewsDraft = {
@@ -28,6 +31,7 @@ export type NewsDraft = {
   // Confirmación de que alguien revisó el texto aportado por IA. Se pide en
   // cada guardado y no se guarda.
   aiReviewed: boolean
+  image: DraftImage | null // null = sin imagen (la app muestra un bloque gráfico)
 }
 
 export const CONTRADICTION_PREFIX = "Fuentes contradictorias:"
@@ -45,6 +49,7 @@ export const emptyDraft = (): NewsDraft => ({
   validationNote: "",
   contradicts: false,
   aiReviewed: false,
+  image: null,
 })
 
 export const MIN_SOURCES_TO_CONFIRM = 2
@@ -141,6 +146,11 @@ export function validateDraft(d: NewsDraft, mode: "draft" | "publish"): string[]
   if (d.contradicts && d.validationStatus !== "in_progress")
     errors.push("Si las fuentes se contradicen, la noticia queda En desarrollo hasta que se aclare.")
 
+  if (d.image) {
+    if (!isHttpUrl(d.image.url.trim()) || !d.image.url.trim().startsWith("https://"))
+      errors.push("La URL de la imagen no es válida (debe empezar con https://).")
+  }
+
   if (mode === "draft") return errors
 
   if (!d.summary.trim()) errors.push("Falta el resumen.")
@@ -157,6 +167,13 @@ export function validateDraft(d: NewsDraft, mode: "draft" | "publish"): string[]
 
   if (d.contradicts && new Set(sourceGroups(d.sources).filter((g) => g !== -1)).size < 2)
     errors.push("Para declarar que las fuentes se contradicen, agrega al menos las 2 fuentes distintas en conflicto.")
+
+  if (d.image && !d.image.attribution.trim())
+    errors.push(
+      d.image.origin === "ai_generated"
+        ? "La imagen generada por IA necesita una atribución (con qué herramienta y quién la generó)."
+        : "La imagen necesita atribución: autor, licencia y de dónde se obtuvo."
+    )
 
   if (d.sources.some((s) => s.type === "ai" && s.name.trim()) && !d.aiReviewed)
     errors.push("Hay una fuente de IA: confirma que una persona revisó y editó ese texto antes de publicarlo.")
@@ -185,6 +202,13 @@ function contentFields(d: NewsDraft) {
     country: country || undefined,
     region: region || undefined,
     topics: parseTopics(d.topics),
+    image: d.image
+      ? {
+          url: d.image.url.trim(),
+          origin: d.image.origin,
+          ...(d.image.attribution.trim() ? { attribution: d.image.attribution.trim() } : {}),
+        }
+      : undefined,
   }
 }
 
@@ -206,8 +230,8 @@ export function toNewsDoc(d: NewsDraft, authorId: string, publish: boolean): New
   }
 }
 
-// Cambios para updateDoc al editar. No toca `authorId`, `createdAt` ni
-// `image` (la imagen tiene su propio flujo); un opcional que se vació se borra.
+// Cambios para updateDoc al editar. No toca `authorId` ni `createdAt`; un
+// opcional que se vació (por ejemplo, se quitó la imagen) se borra.
 export function toNewsUpdate(d: NewsDraft): Record<string, unknown> {
   const update: Record<string, unknown> = { updatedAt: serverTimestamp() }
   for (const [key, value] of Object.entries(contentFields(d))) update[key] = value === undefined ? deleteField() : value
@@ -225,6 +249,18 @@ export function draftFromDoc(data: Record<string, unknown>): NewsDraft {
     .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
     .map((s) => ({ name: str(s.name), url: str(s.url), type: pick(s.type, SOURCE_TYPE_VALUES, "original") }))
 
+  const rawImage = data.image as Record<string, unknown> | undefined
+  const image: DraftImage | null =
+    rawImage && typeof rawImage === "object" && str(rawImage.url)
+      ? {
+          url: str(rawImage.url),
+          // Origen desconocido → el más cauto: que se vea como generada por IA
+          // hasta que una persona lo corrija.
+          origin: pick(rawImage.origin, IMAGE_ORIGIN_VALUES, "ai_generated"),
+          attribution: str(rawImage.attribution),
+        }
+      : null
+
   const note = str(data.validationNote)
   const contradicts = note.startsWith(CONTRADICTION_PREFIX)
 
@@ -241,5 +277,6 @@ export function draftFromDoc(data: Record<string, unknown>): NewsDraft {
     validationNote: contradicts ? note.slice(CONTRADICTION_PREFIX.length).trim() : note,
     contradicts,
     aiReviewed: false,
+    image,
   }
 }

@@ -300,3 +300,20 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 - La "segunda revisión por otra persona" queda como propuesta: necesitaría un campo nuevo (quién revisó) en el esquema.
 
 **Pendiente:** presentar la propuesta de IA al equipo y a Rol 5. Siguiente rama: `rol3/imagen`.
+
+## 2026-10-10 — Portal: imagen libre con atribución y vista previa (Rol 3, Etapa 3)
+
+**Se esperaba:** que una noticia sin imagen pueda recibir una desde el portal, prefiriendo imágenes libres con atribución, con origen registrado y sin que parezca una foto del hecho; y una vista previa de cómo se verá en la app.
+
+**Qué pasó:**
+- **Fuente de imágenes:** antes de escribir código se probó la API de Openverse (indexa Wikimedia Commons, Flickr y otros). Responde desde el navegador (CORS abierto), sin API key ni costo, con URL, autor, licencia y página original. Límite anónimo de 20 búsquedas por minuto y 200 por día, suficiente para el portal. Se usó solo Openverse porque ya incluye Wikimedia.
+- **En el formulario:** sección Imagen para buscar una imagen libre o pegar una URL. Al elegir una imagen libre se llenan solos `origin: "free_attributed"` y una atribución con título, autor, licencia, sitio y enlace. Publicar exige atribución para cualquier origen, la URL debe ser `https://`, y un origen desconocido se carga como `ai_generated` (lo más cauto). Editar ahora sí toca `image`: si se quita en el portal, se borra del documento.
+- **Riesgo de engaño:** la app (Rol 1) solo aclara "no es una foto del hecho" para `ai_generated`, pero una foto libre tampoco es del hecho. Sin tocar el código de la app, la atribución generada empieza con "Imagen ilustrativa (no es del hecho):", porque la app la muestra tal cual en el lector. Ejemplo de la prueba: se eligió una foto de los volcanes de Sacatepéquez para una noticia de prueba de Petén, donde no hay volcanes. Sin el aviso, el lector podría creer que es del lugar.
+- **Vista previa:** aproximación de la tarjeta del feed y del pie de imagen del lector, incluida la etiqueta "Imagen generada por IA" cuando corresponde.
+- **Pruebas:** 7 nuevas (29 en total), todas pasan, incluidas las que leen un resultado real de Openverse.
+
+**Prueba de punta a punta (2026-10-10):** se buscó una imagen en el portal y se eligió una de Flickr (CC BY-NC-SA 2.0). El portal llenó origen y atribución y la vista previa coincidió con la app. Al publicar, la noticia apareció en el iPhone (ubicación Petén) con la imagen en el feed. Evidencia: `docs/evidencia/imagen-libre-elegida.png`, `imagen-vista-previa.png`, `imagen-en-app.png`.
+
+**Qué se cambió y por qué:** la imagen elegida tenía licencia no comercial. Se dejó permitido, porque es un proyecto de curso sin fines de lucro, y se anotó en `docs/imagenes.md` cómo filtrar a licencias comerciales si hiciera falta. Se sugiere a Rol 1 mostrar "Ilustrativa" también para `free_attributed`, para que el aviso no dependa del texto de la atribución.
+
+**Pendiente:** cierre del rol (docs y estado técnico) y desplegar el portal en la nube para la demo.
