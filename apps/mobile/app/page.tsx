@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { collection, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth, useUser } from "@/lib/auth"
+import { LocationChip } from "@/components/LocationChip"
 import type { News } from "@respai/shared"
 
 // Placeholder de Etapa 1: ya detrás del login (AuthGate en el layout), así que
@@ -26,6 +27,7 @@ export default function Home() {
   return (
     <main className="screen">
       <h1>RespAI News</h1>
+      <LocationChip />
       <p className="muted">Sesión: {user.email}</p>
       <button className="btn" onClick={logOut}>
         Cerrar sesión

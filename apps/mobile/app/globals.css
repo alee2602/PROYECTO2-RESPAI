@@ -124,6 +124,91 @@ button {
   font-size: 17px;
 }
 
+/* ---- Ubicación simulada ---- */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.picker h1 {
+  font-size: 24px;
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.picker fieldset {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.picker legend {
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+  font-weight: 600;
+}
+
+.location-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.location-chip svg {
+  color: var(--accent);
+}
+
+.location-chip-action {
+  color: var(--accent);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.back-link {
+  align-self: flex-start;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 /* ---- Utilidades ---- */
 
 .muted {
