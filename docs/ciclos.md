@@ -258,3 +258,23 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Por qué importa:** esto demuestra en la práctica por qué "verificación preliminar con resúmenes de búsqueda" no es lo mismo que "verificación completa" — 2 de ~11 noticias revisadas a fondo no se sostuvieron tal como se habían presentado inicialmente. Es evidencia concreta de por qué el chequeo editorial humano sigue siendo necesario antes de usar esto en la demo real, incluso después de que una IA haga una primera pasada de investigación.
 
 **Pendiente:** el equipo debe revisar los links de las 10 noticias restantes que no se abrieron una por una a fondo (solo se verificaron en detalle: CAIMI Antigua, Banguat, Arévalo combustibles, Artemis II, Olinia, Argentina, HumanIA/IA — 7 de 12). Las que faltan por abrir a fondo: Roosevelt (Ciudad de Guatemala), Expoferia del Mueble (Quetzaltenango), lluvias/Conred, elecciones España, café internacional.
+
+## 2026-10-10 — Portal: lista de noticias, editar, despublicar y borrar (Rol 3, Etapa 1)
+
+**Se esperaba:** que desde el portal se puedan ver todas las noticias (también borradores), corregirlas y controlar si la app las muestra, sin tocar Firestore a mano.
+
+**Qué pasó:**
+- **Lista en el inicio** (`components/NewsList.tsx`): todas las noticias de `news`, de la más nueva a la más vieja, con filtros Todas / Publicadas / Borradores y etiquetas de estado de validación, "Borrador", "Sin fuentes" y "Sin imagen" (esta última prepara el flujo de imagen). Reusa la misma lectura que ya hacía el resumen: no agrega lecturas a Firestore.
+- **Editar** (`/editar/[id]`): reusa el mismo formulario y las mismas reglas de `lib/newsDraft.ts`. Se agregaron `draftFromDoc` (documento → formulario) y `toNewsUpdate` (formulario → cambios para `updateDoc`).
+  - Editar no toca `authorId`, `createdAt` ni `image`; agrega `updatedAt`.
+  - Un campo opcional que se vació (nota, región, país) se **borra** del documento con `deleteField()`, en vez de quedar con el valor viejo.
+  - Si un documento trae datos raros o incompletos, el formulario carga valores seguros: el estado cae a `unverified`, **nunca** se asume `confirmed`.
+- **Acciones:** publicar un borrador (pone `publishedAt`), despublicar (borra `publishedAt`: la app deja de mostrarla sin perder nada) y borrar (con confirmación). Guardar cambios de una noticia ya publicada exige la noticia completa porque ya está visible; despublicar no, para poder bajarla rápido.
+- **Detalle técnico:** este Next.js tiene `cacheComponents` activado, que exige envolver en `<Suspense>` cualquier componente que lea un parámetro de ruta desconocido en build (`useParams` en `/editar/[id]`). Se revisó en la documentación local de Next (`node_modules/next/dist/docs`) antes de escribirlo; el build compila con la ruta como "Partial Prerender".
+- **Pruebas:** 3 pruebas nuevas de edición (13 en total, todas pasan): un opcional vaciado se borra, cargar y volver a guardar no cambia el contenido, y un documento con valores inválidos nunca carga como confirmado. También pasan `tsc` y `npm run build`.
+
+**Prueba de punta a punta (2026-10-10)** con la noticia de prueba del ciclo anterior: se corrigió su título desde el portal y el cambio se vio en la app; al despublicarla desapareció de la app y pasó a "Borrador" en el portal; al volver a publicarla reapareció; al borrarla desapareció de ambos. Evidencia: `docs/evidencia/lista-publicada.png`, `lista-borrador.png`, `editar-acciones-borrador.png`, `lista-sin-borradores.png`.
+
+**Qué se cambió y por qué:** nada respecto al plan. Se dejó fuera a propósito registrar *quién* editó (el esquema solo tiene `authorId`, de quien la creó): agregar un campo así es un cambio de esquema que se propondría al equipo si el flujo de validación (siguiente rama) lo necesita como trazabilidad.
+
+**Pendiente:** siguiente rama `rol3/validacion` (flujo completo: fuente insuficiente, fuentes contradictorias, noticia sin confirmar).

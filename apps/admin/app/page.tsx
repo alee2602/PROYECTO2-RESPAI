@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, Timestamp } from "firebase/firestore"
 import type { News } from "@respai/shared"
 import { db } from "@/lib/firebase"
+import { NewsList, type NewsRow } from "@/components/NewsList"
 
 type Stats = {
   total: number
@@ -12,26 +13,58 @@ type Stats = {
   byStatus: Record<News["validationStatus"], number>
 }
 
-// Inicio del portal: resumen de lo que hay en `news` y acceso a crear una
-// noticia. La lista para editar llega en el siguiente PR del Rol 3.
+const STATUSES = ["confirmed", "in_progress", "unverified"] as const
+const SCOPES = ["local", "national", "international"] as const
+
+// Las semilla guardan fechas como Timestamp; se acepta también texto ISO.
+function toDate(v: unknown): Date | null {
+  if (v instanceof Timestamp) return v.toDate()
+  if (typeof v === "string" && v) return new Date(v)
+  return null
+}
+
+function toRow(id: string, d: Record<string, unknown>): NewsRow {
+  const status = STATUSES.find((s) => s === d.validationStatus) ?? null
+  const scope = SCOPES.find((s) => s === d.scope) ?? null
+  const place = [d.region, d.country].filter((v) => typeof v === "string" && v).join(", ")
+  return {
+    id,
+    title: typeof d.title === "string" ? d.title : "",
+    validationStatus: status,
+    scope,
+    place,
+    published: !!d.publishedAt,
+    date: toDate(d.publishedAt) ?? toDate(d.createdAt),
+    sources: Array.isArray(d.sources) ? d.sources.length : 0,
+    hasImage: !!(d.image && typeof d.image === "object" && "url" in d.image),
+  }
+}
+
+// Inicio del portal: resumen y lista de todo lo que hay en `news` (también
+// borradores), con acceso a crear y editar.
 export default function Home() {
-  const [stats, setStats] = useState<Stats | null>(null)
+  const [rows, setRows] = useState<NewsRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getDocs(collection(db, "news"))
       .then((snap) => {
-        const s: Stats = { total: 0, published: 0, byStatus: { confirmed: 0, in_progress: 0, unverified: 0 } }
-        snap.forEach((doc) => {
-          const n = doc.data() as Partial<News>
-          s.total++
-          if (n.publishedAt) s.published++
-          if (n.validationStatus && n.validationStatus in s.byStatus) s.byStatus[n.validationStatus]++
-        })
-        setStats(s)
+        const list = snap.docs.map((doc) => toRow(doc.id, doc.data()))
+        list.sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0))
+        setRows(list)
       })
       .catch((e) => setError(e.code ?? String(e)))
   }, [])
+
+  const stats: Stats | null = rows && {
+    total: rows.length,
+    published: rows.filter((r) => r.published).length,
+    byStatus: {
+      confirmed: rows.filter((r) => r.validationStatus === "confirmed").length,
+      in_progress: rows.filter((r) => r.validationStatus === "in_progress").length,
+      unverified: rows.filter((r) => r.validationStatus === "unverified").length,
+    },
+  }
 
   return (
     <main className="page">
@@ -78,6 +111,8 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      {rows && <NewsList rows={rows} />}
     </main>
   )
 }

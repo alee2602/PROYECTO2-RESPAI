@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { emptyDraft, parseTopics, toNewsDoc, validateDraft, type NewsDraft } from "./newsDraft.ts"
+import { draftFromDoc, emptyDraft, parseTopics, toNewsDoc, toNewsUpdate, validateDraft, type NewsDraft } from "./newsDraft.ts"
 
 // Noticia local completa y publicable, como punto de partida de cada caso.
 function complete(patch: Partial<NewsDraft> = {}): NewsDraft {
@@ -100,4 +100,30 @@ test("el documento no lleva campos vacíos y solo publicar pone publishedAt", ()
   assert.deepEqual(doc.sources, [{ name: "Fuente A", type: "original" }])
   assert.equal(doc.authorId, "uid-1")
   assert.equal("publishedAt" in toNewsDoc(draft, "uid-1", true), true)
+})
+
+test("editar: un opcional que se vació se borra del documento, y no toca autor ni fechas de creación", () => {
+  const update = toNewsUpdate(complete({ validationStatus: "unverified", validationNote: "", region: "" }))
+  for (const key of ["validationNote", "region"]) {
+    assert.equal(typeof update[key], "object", `${key} debería ser deleteField()`)
+  }
+  assert.equal(update.title, "Corte de agua en zona 1")
+  assert.ok("updatedAt" in update)
+  for (const key of ["authorId", "createdAt", "publishedAt", "image"]) assert.equal(key in update, false)
+})
+
+test("editar: cargar un documento y volverlo a guardar no cambia el contenido", () => {
+  const original = complete()
+  const doc = toNewsDoc(original, "uid-1", true) as unknown as Record<string, unknown>
+  const roundTrip = draftFromDoc(doc)
+  assert.deepEqual(validateDraft(roundTrip, "publish"), [])
+  assert.equal(roundTrip.topics, "servicios públicos, agua")
+  assert.equal(roundTrip.sources[0]!.url, "https://muniguate.com")
+})
+
+test("editar: un documento incompleto o con valores raros se carga con valores seguros", () => {
+  const d = draftFromDoc({ title: "Vieja", validationStatus: "verdadera", sources: [{ name: "X", type: "otro" }, null] })
+  assert.equal(d.validationStatus, "unverified") // nunca se asume "confirmed"
+  assert.deepEqual(d.sources, [{ name: "X", url: "", type: "original" }])
+  assert.equal(d.scope, "local")
 })
