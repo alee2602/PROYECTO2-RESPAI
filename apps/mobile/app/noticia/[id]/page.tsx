@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import Link from "next/link"
 import type { News } from "@respai/shared"
 import { fetchNewsById, newsDate } from "@/lib/news"
-import { reasonFor } from "@/lib/feed"
+import { displayScope, reasonFor } from "@/lib/feed"
 import { useLocation } from "@/lib/profile"
 import { useUser } from "@/lib/auth"
 import { logSignal, useReadSignals } from "@/lib/signals"
@@ -41,7 +41,7 @@ export default function NoticiaPage() {
   return (
     <>
       <TopBar
-        title={news ? SCOPE_LABEL[news.scope] : "Noticia"}
+        title={news ? SCOPE_LABEL[displayScope(news, location)] : "Noticia"}
         action={
           news ? (
             <ShareButton news={news} onShared={(m) => logSignal(user.uid, news, location, "share", { shareMethod: m })} />
@@ -72,17 +72,17 @@ export default function NoticiaPage() {
             </Link>
           </div>
         )}
-        {news && <Article news={news} reason={reasonFor(news, location)} />}
+        {news && <Article news={news} reason={reasonFor(news, location)} scope={displayScope(news, location)} />}
       </main>
     </>
   )
 }
 
-function Article({ news, reason }: { news: News; reason: string }) {
+function Article({ news, reason, scope }: { news: News; reason: string; scope: News["scope"] }) {
   const date = new Date(newsDate(news)).toLocaleString("es", { dateStyle: "long", timeStyle: "short" })
   const updated = news.updatedAt && news.updatedAt !== news.publishedAt ? new Date(news.updatedAt).toLocaleString("es", { dateStyle: "long", timeStyle: "short" }) : null
   const hasAiSource = news.sources.some((s) => s.type === "ai")
-  const kicker = [SCOPE_LABEL[news.scope], news.region, news.country].filter(Boolean).join(" · ")
+  const kicker = [SCOPE_LABEL[scope], news.region, news.country].filter(Boolean).join(" · ")
 
   return (
     <article className="article">

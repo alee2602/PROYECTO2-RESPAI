@@ -1,7 +1,11 @@
 import type { News } from "@respai/shared"
 import type { UserLocation } from "@/lib/locations"
 import { newsDate } from "@/lib/news"
-import { rankNewsByLocation } from "@/lib/ranking"
+import { displayScope, rankNewsByLocation } from "@/lib/ranking"
+
+// Re-exportado para que quien ya importa de aquí (reasonFor, FeedItem) no
+// tenga que importar también de lib/ranking directamente.
+export { displayScope } from "@/lib/ranking"
 
 // ---------------------------------------------------------------------------
 // Punto de integración con Rol 4 (ranking + anti-burbuja).
@@ -23,6 +27,7 @@ export type FeedItem = {
   prominence: Prominence
   reason: string // "por qué aparece", corto, en español
   protectedByDiversity?: boolean // true si entró por la protección anti-burbuja (Rol 4)
+  displayScope: News["scope"] // etiqueta Local/Nacional/Internacional, relativa a TU ubicación (ver displayScope())
 }
 
 export type RankFn = (news: News[], location: UserLocation) => FeedItem[]
@@ -34,6 +39,7 @@ export function prominenceByPosition(index: number): Prominence {
   if (index <= 6) return "normal"
   return "compact"
 }
+
 
 // Explicación derivada de alcance + ubicación (fallback).
 export function reasonFor(n: News, loc: UserLocation): string {
@@ -73,6 +79,7 @@ export const fallbackFeed: RankFn = (news, location) => {
     news: n,
     prominence: prominenceByPosition(i),
     reason: reasonFor(n, location),
+    displayScope: displayScope(n, location),
   }))
 }
 
@@ -91,6 +98,7 @@ export const rankFeed: RankFn = (news, location) => {
       reason: isProtected
         ? `${reasonFor(n, location)} · parte de la mezcla de alcances de tu feed`
         : reasonFor(n, location),
+      displayScope: displayScope(n, location),
       ...(isProtected ? { protectedByDiversity: true } : {}),
     }
   })

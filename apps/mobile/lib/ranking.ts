@@ -39,13 +39,26 @@ function locationScore(n: News, loc: UserLocation): number {
   return 4 // local o nacional de otro país
 }
 
-// No usa validationStatus para ordenar — el estado se muestra con su
-// distintivo, pero no decide si una noticia sube o baja (la validación es
-// información, no un filtro de relevancia).
+// Desempate por validación: entre noticias igual de cercanas, la más
+// confirmada va primero. NO es un filtro — una `unverified` sigue
+// apareciendo siempre que exista, nunca se oculta ni se saca del feed, solo
+// deja de ganarle a algo igual de relevante y mejor sustentado por pura
+// coincidencia de ubicación. (Encontrado probando con datos reales: una
+// noticia de fuente única sin confirmar terminó de "hero" por ser la única
+// coincidencia de país para esa ubicación — ver docs/ciclos.md, 2026-10-10.)
+function validationRank(n: News): number {
+  if (n.validationStatus === "confirmed") return 0
+  if (n.validationStatus === "in_progress") return 1
+  return 2 // unverified
+}
+
 function compare(a: News, b: News, loc: UserLocation): number {
   const sa = locationScore(a, loc)
   const sb = locationScore(b, loc)
   if (sa !== sb) return sa - sb
+  const va = validationRank(a)
+  const vb = validationRank(b)
+  if (va !== vb) return va - vb
   return newsDate(b).localeCompare(newsDate(a)) // más reciente primero
 }
 
@@ -94,4 +107,18 @@ export type RankedNews = { items: News[]; protectedIds: Set<string> }
 export function rankNewsByLocation(news: News[], location: UserLocation): RankedNews {
   const sorted = [...news].sort((a, b) => compare(a, b, location))
   return applyDiversityFloor(sorted)
+}
+
+// `news.scope` describe el alcance PROPIO de la noticia (para qué tan lejos
+// llega su relevancia — lo usa el ranking de arriba). La etiqueta que se
+// MUESTRA en pantalla es distinta: es relativa a dónde estás simulando
+// estar, porque puedes cambiar de ubicación en cualquier momento. Ejemplo:
+// una noticia nacional de España se ve "Nacional" si simulas estar en
+// España, pero "Internacional" si simulas estar en Guatemala o EE.UU. — la
+// MISMA noticia, etiqueta distinta según quién la ve (decisión del
+// 2026-10-10, ver docs/ciclos.md).
+export function displayScope(n: News, loc: UserLocation): News["scope"] {
+  if (!n.country || n.country !== loc.country) return "international"
+  if (n.scope === "local" && Boolean(loc.region) && n.region === loc.region) return "local"
+  return "national"
 }
