@@ -144,8 +144,8 @@ Cada etapa termina con algo que funciona de punta a punta y con evidencia guarda
 
 ### Etapa 1 — Primera rebanada: portal → feed
 
-- [ ] Portal: login, formulario para crear una noticia con fuentes y estado de validación, botón de publicar.
-- [ ] Firestore: la noticia publicada queda guardada con el esquema.
+- [x] Portal: login, formulario para crear una noticia con fuentes y estado de validación, botón de publicar.
+- [x] Firestore: la noticia publicada queda guardada con el esquema.
 - [ ] PWA: login, selector de ubicación simulada, feed que lee las noticias publicadas.
 - [ ] Todo desplegado en la nube (nada corriendo solo en localhost).
 - Criterio de salida: una noticia publicada desde el portal aparece en el celular de otra persona, según su ubicación.
@@ -162,8 +162,8 @@ Cada etapa termina con algo que funciona de punta a punta y con evidencia guarda
 
 - [ ] Ranking por reglas y puntajes + protección contra burbujas (con pruebas que demuestren que una noticia importante no desaparece por preferencias o ubicación).
 - [ ] Jerarquía visual del feed (tamaño y posición según relevancia).
-- [ ] Flujo de validación completo (fuente insuficiente, fuentes contradictorias, noticia sin confirmar).
-- [ ] Flujo de imagen: obtener/generar para noticias sin imagen, con etiqueta visible de IA y campo de origen.
+- [x] Flujo de validación completo (fuente insuficiente, fuentes contradictorias, noticia sin confirmar). Ver `docs/validacion.md`.
+- [x] Flujo de imagen: obtener/generar para noticias sin imagen, con etiqueta visible de IA y campo de origen. Ver `docs/imagenes.md` (imágenes libres, sin generación).
 - [ ] Pulido visual y revisión de zonas seguras en iOS.
 
 ### Etapa 4 — Ensayo y cierre
