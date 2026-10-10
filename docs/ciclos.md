@@ -154,3 +154,21 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** el diseño original tenía un bug real de lógica (no de sintaxis ni de tipos) que ni el build ni el typecheck hubieran detectado — exactamente el tipo de error para el que sirven las pruebas automáticas que pedía el criterio de aceptación del rol ("pruebas que demuestren que una noticia importante no desaparece por ubicación o preferencias").
 
 **Pendiente:** afinidad por tema a partir de señales de comportamiento (`docs/senales.md`), sin desplazar el piso anti-burbuja — Etapa 3. Abrir PR en rama `rol4/ranking-ubicacion` y conseguir aprobación de alguien del equipo (branch protection activo desde el 2026-10-09).
+
+## 2026-10-10 — Portal: acceso solo para admins (Rol 3, Etapa 1)
+
+**Se esperaba:** reemplazar el placeholder de `apps/admin` por un acceso real: login con Google, y que solo los correos autorizados del equipo vean el portal.
+
+**Qué pasó:**
+- `lib/auth.tsx` centraliza la sesión (mismo método que la PWA, `signInWithPopup`, ver ciclo 2026-09-30) y expone si el correo es admin. `prompt: "select_account"` obliga a elegir cuenta, para poder cambiar de cuenta en la prueba sin cerrar sesión en Google.
+- `components/AdminGate.tsx` decide la pantalla: sin sesión → login; con sesión pero sin ser admin → "Sin acceso al portal"; admin → portal. Los errores comunes de login (popup cerrado o bloqueado, sin red, dominio no autorizado) se muestran en español.
+- `lib/admins.ts` guarda la lista de correos admin como **espejo** de `isAdmin()` en `firestore.rules`. Esta lista solo decide qué pantalla se ve (UX); la seguridad real la siguen poniendo las reglas de Firestore, que rechazan escrituras en `news` de correos no admin aunque alguien se salte la pantalla.
+- La página principal muestra un resumen de la colección `news` (total, publicadas y conteo por estado de validación) como confirmación de que la lectura funciona con sesión admin.
+
+**Prueba (localhost, 2026-10-10):**
+- `biancalderon01.15@gmail.com` (admin) → entra y ve el resumen: 13 noticias, 12 publicadas, 8 confirmadas, 2 en desarrollo, 3 no verificadas. Evidencia: `docs/evidencia/acceso-admin.png`.
+- `biancalderon15@gmail.com` (no admin) → ve "Sin acceso al portal" con opción de cambiar de cuenta. Evidencia: `docs/evidencia/acceso-denegado.png`.
+
+**Qué se cambió y por qué:** nada respecto al plan. La única decisión de diseño fue duplicar la lista de correos en el cliente en vez de leerla de Firestore: es más simple y no agrega una lectura por login, a cambio de tener que mantener las dos listas sincronizadas (queda anotado en el comentario de `lib/admins.ts`).
+
+**Pendiente:** probar el portal desplegado (no solo localhost). Siguiente rama: `rol3/formulario` (crear noticia con fuentes y estado de validación).
