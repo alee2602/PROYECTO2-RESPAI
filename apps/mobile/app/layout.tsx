@@ -4,6 +4,7 @@ import { AuthProvider } from "@/lib/auth";
 import { AuthGate } from "@/components/AuthGate";
 import { ProfileProvider } from "@/lib/profile";
 import { LocationGate } from "@/components/LocationGate";
+import { ChatDock } from "@/components/ChatDock";
 import "./globals.css";
 
 // Inter para leer (cuerpo, metadatos); Poppins para titulares y marca.
@@ -59,7 +60,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <AuthProvider>
           <AuthGate>
             <ProfileProvider>
-              <LocationGate>{children}</LocationGate>
+              <LocationGate>
+                {children}
+                <ChatDock />
+              </LocationGate>
             </ProfileProvider>
           </AuthGate>
         </AuthProvider>
