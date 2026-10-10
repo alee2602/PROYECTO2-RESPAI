@@ -7,6 +7,8 @@ import type { News } from "@respai/shared"
 import { fetchNewsById, newsDate } from "@/lib/news"
 import { reasonFor } from "@/lib/feed"
 import { useLocation } from "@/lib/profile"
+import { useUser } from "@/lib/auth"
+import { logSignal, useReadSignals } from "@/lib/signals"
 import { IMAGE_ORIGIN_LABEL, SCOPE_LABEL } from "@/lib/labels"
 import { SourceTypeBadge } from "@/components/Badges"
 import { VerificationPanel } from "@/components/VerificationPanel"
@@ -18,6 +20,7 @@ import { TopBar } from "@/components/TopBar"
 export default function NoticiaPage() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
+  const user = useUser()
   // undefined = cargando; null = no existe / no publicada / incompleta
   const [news, setNews] = useState<News | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
@@ -32,9 +35,19 @@ export default function NoticiaPage() {
     }
   }, [id])
 
+  // Señales de comportamiento (docs/senales.md)
+  useReadSignals(news, user.uid, location)
+
   return (
     <>
-      <TopBar title={news ? SCOPE_LABEL[news.scope] : "Noticia"} action={news ? <ShareButton news={news} /> : undefined} />
+      <TopBar
+        title={news ? SCOPE_LABEL[news.scope] : "Noticia"}
+        action={
+          news ? (
+            <ShareButton news={news} onShared={(m) => logSignal(user.uid, news, location, "share", { shareMethod: m })} />
+          ) : undefined
+        }
+      />
       <main className="reader">
         {error && (
           <div className="state-box" role="alert">
@@ -156,7 +169,8 @@ function Article({ news, reason }: { news: News; reason: string }) {
 }
 
 // Compartir con la hoja nativa del celular; si no existe, copia el enlace.
-function ShareButton({ news }: { news: News }) {
+// Solo registra la señal `share` si se compartió de verdad (no si se canceló).
+function ShareButton({ news, onShared }: { news: News; onShared: (method: "native" | "copy") => void }) {
   const [copied, setCopied] = useState(false)
 
   async function share() {
@@ -164,13 +178,15 @@ function ShareButton({ news }: { news: News }) {
     try {
       if (navigator.share) {
         await navigator.share({ title: news.title, text: news.summary, url })
+        onShared("native")
       } else {
         await navigator.clipboard.writeText(url)
+        onShared("copy")
         setCopied(true)
         setTimeout(() => setCopied(false), 1800)
       }
     } catch {
-      // El usuario canceló la hoja de compartir: no es un error.
+      // El usuario canceló la hoja de compartir: no es un error ni una señal.
     }
   }
 
