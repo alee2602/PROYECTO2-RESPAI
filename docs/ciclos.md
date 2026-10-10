@@ -172,3 +172,23 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** nada respecto al plan. La única decisión de diseño fue duplicar la lista de correos en el cliente en vez de leerla de Firestore: es más simple y no agrega una lectura por login, a cambio de tener que mantener las dos listas sincronizadas (queda anotado en el comentario de `lib/admins.ts`).
 
 **Pendiente:** probar el portal desplegado (no solo localhost). Siguiente rama: `rol3/formulario` (crear noticia con fuentes y estado de validación).
+
+## 2026-10-10 — Portal: formulario para crear y publicar noticias (Rol 3, Etapa 1)
+
+**Se esperaba:** que una persona admin pueda crear una noticia desde el portal con fuentes, alcance geográfico y estado de validación, y que al publicarla aparezca en la app según la ubicación simulada de cada usuario.
+
+**Qué pasó:**
+- **Países y regiones compartidos:** el feed compara `country` y `region` como texto exacto, y la lista vivía solo en `apps/mobile/lib/locations.ts`. Se agregó `packages/shared/locations.ts` (solo nombres) para que el portal guarde exactamente los mismos textos que el usuario elige en la app. No cambia el esquema `News` ni toca `apps/mobile`; se avisó al equipo (Rol 1 puede tomar los nombres de ahí más adelante).
+- **Reglas separadas de la pantalla** (`apps/admin/lib/newsDraft.ts`), para probarlas sin navegador y reusarlas al editar:
+  - `confirmed` exige ≥2 fuentes que no sean IA (`original` o `summary`). Aplica también a borradores: nunca queda guardada una noticia "confirmada" sin evidencia. Una fuente `ai` se muestra al lector pero no cuenta como prueba.
+  - `in_progress` y `unverified` exigen `validationNote` (por qué no está confirmada, qué falta o qué se contradice).
+  - Publicar exige título, resumen, cuerpo, al menos una fuente, país (salvo internacional) y región (si es local).
+  - Firestore no acepta `undefined`: los campos opcionales vacíos no se guardan. Fechas con `serverTimestamp()`, igual que las noticias semilla.
+- **Publicar vs. borrador:** "Publicar" guarda con `publishedAt` (la app la muestra); "Guardar borrador" la guarda sin `publishedAt` (la app la ignora, ver `fetchPublishedNews` en `apps/mobile/lib/news.ts`).
+- **Pruebas:** 10 pruebas con el test runner nativo de Node (`npm test` en `apps/admin`, mismo patrón que `apps/mobile/lib/ranking.test.ts`), todas pasaron al primer intento. También pasan `tsc --noEmit` y `npm run build`.
+
+**Prueba de punta a punta (2026-10-10):** se publicó desde el portal (localhost) una noticia de prueba local en Guatemala / Petén, estado `unverified`, una fuente `original`, sin imagen. En la app desplegada en Vercel, abierta en un iPhone real con ubicación en Petén, apareció en el primer lugar del feed con "No verificada", "Local · Petén", la fuente marcada "Original" y "Ocurre en tu región (Petén)". Evidencia: `docs/evidencia/formulario-publicada.png`, `docs/evidencia/formulario-en-app.jpeg`.
+
+**Qué se cambió y por qué:** se decidió exigir nota también para `unverified` (la decisión original solo la pedía para `in_progress`), para que la app siempre pueda decir *qué* no se pudo confirmar (CLAUDE.md, restricción 6). Para `international` el país es opcional (vacío = alcance global) y se escribe libre con sugerencias, porque una noticia internacional puede ser de un país que no está entre las ubicaciones elegibles.
+
+**Pendiente:** borrar la noticia de prueba (ID `IgTAEKzgN6FEMGyGRGgr`) desde Firebase Console o, cuando exista, desde la lista del portal. Siguiente rama: `rol3/lista-editar` (ver, editar, publicar borradores y despublicar).
