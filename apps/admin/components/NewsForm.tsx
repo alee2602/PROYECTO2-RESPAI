@@ -8,13 +8,18 @@ import { LOCATIONS_LIST } from "@respai/shared"
 import { db } from "@/lib/firebase"
 import { useAdmin } from "@/lib/auth"
 import { STATUS_LABEL } from "@/lib/labels"
+import { knownOutlet, newsSearchUrl, outletsFor } from "@/lib/outlets"
 import {
-  countsAsEvidence,
+  CONTRADICTION_PREFIX,
+  diagnose,
   emptyDraft,
+  evidenceCount,
   MIN_SOURCES_TO_CONFIRM,
+  sourceGroups,
   toNewsDoc,
   toNewsUpdate,
   validateDraft,
+  type Diagnosis,
   type DraftSource,
   type NewsDraft,
 } from "@/lib/newsDraft"
@@ -36,6 +41,37 @@ const STATUSES: { value: NewsDraft["validationStatus"]; hint: string }[] = [
   { value: "in_progress", hint: "Hay información parcial o fuentes que se contradicen. Explica cuáles en la nota." },
   { value: "unverified", hint: "Todavía no se puede confirmar. Explica qué falta." },
 ]
+
+const DIAGNOSIS_TITLE: Record<Diagnosis, string> = {
+  contradiction: "Caso: fuentes que se contradicen",
+  insufficient: "Caso: fuente insuficiente",
+  enough: "Fuentes suficientes",
+}
+
+const BLOCKED_HINT: Record<Diagnosis, string> = {
+  contradiction: "No disponible: declaraste que las fuentes se contradicen.",
+  insufficient: `No disponible: hacen falta ${MIN_SOURCES_TO_CONFIRM} fuentes distintas que no sean IA.`,
+  enough: "",
+}
+
+const NOTE_PLACEHOLDER: Record<Diagnosis, string> = {
+  contradiction: "Ej. El Banco Central proyecta 2.7% y Goldman Sachs 3%; ninguna fuente confirma la cifra final.",
+  insufficient: "Ej. Solo lo reporta AGN; no se encontró en otro medio ni en un comunicado oficial.",
+  enough: "Ej. El hecho sigue en curso: falta el dato oficial de cierre.",
+}
+
+// Por qué una fuente cuenta o no como prueba, bajo cada fila.
+function SourceHint({ source, duplicateOf }: { source: DraftSource; duplicateOf: number | null }) {
+  if (!source.name.trim()) return null
+  const outlet = knownOutlet(source.url)
+  const notes = [
+    source.type === "ai" && "Aporte de IA: se muestra, pero no cuenta como prueba.",
+    duplicateOf && `Mismo medio que la fuente ${duplicateOf}: no suma como segunda fuente.`,
+    outlet && `Medio de referencia: ${outlet.name}.`,
+  ].filter(Boolean)
+  if (!notes.length) return null
+  return <p className="source-hint muted small">{notes.join(" ")}</p>
+}
 
 type Action = "draft" | "publish" | "unpublish"
 
@@ -74,7 +110,11 @@ export function NewsForm({ existing }: { existing?: ExistingNews }) {
     setDraft((d) => ({ ...d, sources: d.sources.map((s, j) => (j === i ? { ...s, ...patch } : s)) }))
 
   const regions = LOCATIONS_LIST.find((l) => l.country === draft.country)?.regions ?? []
-  const evidence = draft.sources.filter(countsAsEvidence).length
+  const evidence = evidenceCount(draft.sources)
+  const groups = sourceGroups(draft.sources)
+  const diagnosis = diagnose(draft)
+  const hasAi = draft.sources.some((s) => s.type === "ai" && s.name.trim())
+  const outlets = outletsFor(draft.country)
 
   async function run(task: () => Promise<void>) {
     setBusy(true)
@@ -258,6 +298,37 @@ export function NewsForm({ existing }: { existing?: ExistingNews }) {
         <p className="muted small">
           De dónde sale la información. Una fuente marcada como IA se muestra al lector, pero nunca cuenta como prueba.
         </p>
+
+        <div className="verify-box">
+          <strong>¿Otros medios también lo reportan?</strong>
+          {draft.title.trim() ? (
+            <>
+              <span className="muted small">
+                Busca el título en Google Noticias y abre los resultados en otra pestaña. Si un medio lo confirma, agrégalo
+                como fuente. El portal no consulta nada por su cuenta.
+              </span>
+              <div className="verify-links">
+                <a
+                  className="btn btn-sm"
+                  href={newsSearchUrl(draft.title, outlets)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Buscar en medios de referencia ↗
+                </a>
+                <a className="btn btn-sm" href={newsSearchUrl(draft.title)} target="_blank" rel="noopener noreferrer">
+                  Buscar en todo Google Noticias ↗
+                </a>
+              </div>
+              <span className="muted small">
+                Medios de referencia{draft.country.trim() && ` (${draft.country.trim()} + internacionales)`}:{" "}
+                {outlets.map((o) => o.name).join(", ")}. Estar en esta lista no vuelve verdadera una noticia.
+              </span>
+            </>
+          ) : (
+            <span className="muted small">Escribe el título para poder buscarlo en otros medios.</span>
+          )}
+        </div>
         {draft.sources.map((s, i) => (
           <div key={i} className="source-row">
             <label className="field">
@@ -296,6 +367,7 @@ export function NewsForm({ existing }: { existing?: ExistingNews }) {
             >
               Quitar
             </button>
+            <SourceHint source={s} duplicateOf={groups[i] !== -1 && groups[i] !== i ? groups[i]! + 1 : null} />
           </div>
         ))}
         <div>
@@ -307,32 +379,85 @@ export function NewsForm({ existing }: { existing?: ExistingNews }) {
             + Agregar fuente
           </button>
         </div>
+
+        <div className="ai-notice">
+          <strong>Ningún texto generado por IA se publica sin revisión humana.</strong>
+          {hasAi ? (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={draft.aiReviewed}
+                onChange={(e) => set("aiReviewed", e.target.checked)}
+              />
+              <span>Revisé y edité el texto aportado por IA, y comprobé sus datos contra las otras fuentes.</span>
+            </label>
+          ) : (
+            <span className="muted small">Si usas un aporte de IA, agrégalo como fuente de tipo IA para que el lector lo vea.</span>
+          )}
+        </div>
       </section>
 
       <section className="card">
         <h2>Validación</h2>
-        <p className="muted small">
-          Lo decides tú, no la IA ni el sistema. Fuentes que cuentan como prueba: {evidence} de {MIN_SOURCES_TO_CONFIRM}{" "}
-          necesarias para confirmar.
-        </p>
+        <p className="muted small">Lo decides tú, no la IA ni el sistema. El portal solo te impide lo que no se sostiene.</p>
+
+        <div className={`diagnosis ${diagnosis}`} aria-live="polite">
+          <strong>{DIAGNOSIS_TITLE[diagnosis]}</strong>
+          <span className="small">
+            {diagnosis === "contradiction" &&
+              `Queda En desarrollo hasta que se aclare. En la nota, explica qué dice cada fuente; se guardará empezando con "${CONTRADICTION_PREFIX}".`}
+            {diagnosis === "insufficient" &&
+              `Hay ${evidence} de ${MIN_SOURCES_TO_CONFIRM} fuentes distintas que no son IA. No se puede confirmar todavía: márcala No verificada (o En desarrollo si el hecho sigue ocurriendo), explica qué falta y busca una segunda fuente en otros medios.`}
+            {diagnosis === "enough" &&
+              (draft.validationStatus === "confirmed"
+                ? `La confirmas tú, con ${evidence} fuentes distintas que la respaldan.`
+                : `Hay ${evidence} fuentes distintas: alcanza para confirmar, pero la decisión es tuya. Si el hecho sigue en curso o tienes dudas, déjala sin confirmar y explica por qué.`)}
+          </span>
+        </div>
+
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={draft.contradicts}
+            onChange={(e) => {
+              const contradicts = e.target.checked
+              setDraft((d) => ({ ...d, contradicts, validationStatus: contradicts ? "in_progress" : d.validationStatus }))
+            }}
+          />
+          <span>Las fuentes se contradicen (por ejemplo, dan cifras o versiones distintas del mismo hecho)</span>
+        </label>
+
         <div className="choice-row" role="radiogroup" aria-label="Estado de validación">
-          {STATUSES.map((s) => (
-            <label key={s.value} className={`choice status-${s.value} ${draft.validationStatus === s.value ? "selected" : ""}`}>
-              <input
-                type="radio"
-                name="validationStatus"
-                checked={draft.validationStatus === s.value}
-                onChange={() => set("validationStatus", s.value)}
-              />
-              <strong>{STATUS_LABEL[s.value]}</strong>
-              <span className="muted small">{s.hint}</span>
-            </label>
-          ))}
+          {STATUSES.map((s) => {
+            const blocked =
+              (s.value === "confirmed" && diagnosis !== "enough") || (s.value !== "in_progress" && draft.contradicts)
+            return (
+              <label
+                key={s.value}
+                className={`choice status-${s.value} ${draft.validationStatus === s.value ? "selected" : ""} ${blocked ? "blocked" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="validationStatus"
+                  checked={draft.validationStatus === s.value}
+                  disabled={blocked}
+                  onChange={() => set("validationStatus", s.value)}
+                />
+                <strong>{STATUS_LABEL[s.value]}</strong>
+                <span className="muted small">{blocked ? BLOCKED_HINT[diagnosis] : s.hint}</span>
+              </label>
+            )
+          })}
         </div>
         <label className="field">
           <span>Nota de validación{draft.validationStatus === "confirmed" && " (opcional)"}</span>
           <span className="muted small">Por qué tiene este estado, qué falta confirmar o qué fuentes se contradicen.</span>
-          <textarea rows={3} value={draft.validationNote} onChange={(e) => set("validationNote", e.target.value)} />
+          <textarea
+            rows={3}
+            value={draft.validationNote}
+            onChange={(e) => set("validationNote", e.target.value)}
+            placeholder={NOTE_PLACEHOLDER[diagnosis]}
+          />
         </label>
       </section>
 
