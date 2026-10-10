@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { collection, getDocs } from "firebase/firestore"
 import type { News } from "@respai/shared"
 import { db } from "@/lib/firebase"
@@ -11,8 +12,8 @@ type Stats = {
   byStatus: Record<News["validationStatus"], number>
 }
 
-// Inicio del portal: resumen de lo que hay en `news`. El formulario de crear
-// noticia y la lista para editar llegan en los siguientes PRs del Rol 3.
+// Inicio del portal: resumen de lo que hay en `news` y acceso a crear una
+// noticia. La lista para editar llega en el siguiente PR del Rol 3.
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -34,11 +35,16 @@ export default function Home() {
 
   return (
     <main className="page">
-      <div>
-        <h1>Noticias</h1>
-        <p className="muted">
-          Publicar y decidir el estado de validación es criterio humano: la IA puede asistir, nunca decidir.
-        </p>
+      <div className="page-head">
+        <div>
+          <h1>Noticias</h1>
+          <p className="muted">
+            Publicar y decidir el estado de validación es criterio humano: la IA puede asistir, nunca decidir.
+          </p>
+        </div>
+        <Link href="/nueva" className="btn btn-primary">
+          + Nueva noticia
+        </Link>
       </div>
 
       {error && (

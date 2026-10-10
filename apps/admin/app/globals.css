@@ -259,3 +259,135 @@ code {
 .stat.unverified strong {
   color: var(--unverified);
 }
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Formulario de noticia */
+.news-form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field > span:first-child {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.field input,
+.field select,
+.field textarea {
+  font: inherit;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.choice-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.choice {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choice:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.choice.selected {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+
+.choice.status-confirmed.selected {
+  border-color: var(--confirmed);
+  background: var(--confirmed-bg);
+}
+
+.choice.status-in_progress.selected {
+  border-color: var(--progress);
+  background: var(--progress-bg);
+}
+
+.choice.status-unverified.selected {
+  border-color: var(--unverified);
+  background: var(--unverified-bg);
+}
+
+.source-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border);
+}
+
+@media (max-width: 720px) {
+  .source-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-errors {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.form-errors ul {
+  padding-left: 20px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
