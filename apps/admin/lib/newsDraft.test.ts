@@ -113,14 +113,14 @@ test("el documento no lleva campos vacíos y solo publicar pone publishedAt", ()
   assert.equal("publishedAt" in toNewsDoc(draft, "uid-1", true), true)
 })
 
-test("editar: un opcional que se vació se borra del documento, y no toca autor ni fechas de creación", () => {
+test("editar: un opcional que se vació se borra del documento (también la imagen), y no toca autor ni fecha de creación", () => {
   const update = toNewsUpdate(complete({ validationStatus: "unverified", validationNote: "", region: "" }))
-  for (const key of ["validationNote", "region"]) {
+  for (const key of ["validationNote", "region", "image"]) {
     assert.equal(typeof update[key], "object", `${key} debería ser deleteField()`)
   }
   assert.equal(update.title, "Corte de agua en zona 1")
   assert.ok("updatedAt" in update)
-  for (const key of ["authorId", "createdAt", "publishedAt", "image"]) assert.equal(key in update, false)
+  for (const key of ["authorId", "createdAt", "publishedAt"]) assert.equal(key in update, false)
 })
 
 test("editar: cargar un documento y volverlo a guardar no cambia el contenido", () => {
@@ -223,4 +223,34 @@ test("con una fuente de IA, publicar exige confirmar la revisión humana (un bor
   assert.deepEqual(validateDraft(withAi, "draft"), [])
   assert.deepEqual(validateDraft({ ...withAi, aiReviewed: true }, "publish"), [])
   assert.equal(draftFromDoc(toNewsDoc({ ...withAi, aiReviewed: true }, "u", true) as never).aiReviewed, false)
+})
+
+// --- Imagen ---
+
+const freeImage = {
+  url: "https://upload.wikimedia.org/x.jpg",
+  origin: "free_attributed" as const,
+  attribution: "Imagen ilustrativa (no es del hecho): \"Volcán\", de J. R. (CC BY 2.0), vía Wikimedia Commons.",
+}
+
+test("imagen: se guarda con origen y atribución, y se recupera al editar", () => {
+  const doc = toNewsDoc(complete({ image: freeImage }), "u", true) as unknown as Record<string, unknown>
+  assert.deepEqual(doc.image, freeImage)
+  assert.deepEqual(draftFromDoc(doc).image, freeImage)
+  assert.equal("image" in toNewsDoc(complete(), "u", true), false)
+})
+
+test("imagen: publicar exige atribución; la URL debe ser https también en borrador", () => {
+  const noCredit = complete({ image: { ...freeImage, attribution: " " } })
+  assert.ok(validateDraft(noCredit, "publish").some((e) => e.includes("atribución")))
+  assert.deepEqual(validateDraft(noCredit, "draft"), [])
+
+  const http = complete({ image: { ...freeImage, url: "http://example.com/a.jpg" } })
+  assert.equal(validateDraft(http, "draft").length, 1)
+})
+
+test("imagen: con un origen desconocido se carga como IA (lo más cauto) hasta que alguien lo corrija", () => {
+  const d = draftFromDoc({ image: { url: "https://x.com/a.jpg", origin: "otro" } })
+  assert.equal(d.image?.origin, "ai_generated")
+  assert.equal(draftFromDoc({ image: { origin: "real_photo" } }).image, null)
 })

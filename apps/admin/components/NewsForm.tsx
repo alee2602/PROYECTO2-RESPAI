@@ -9,6 +9,8 @@ import { db } from "@/lib/firebase"
 import { useAdmin } from "@/lib/auth"
 import { STATUS_LABEL } from "@/lib/labels"
 import { knownOutlet, newsSearchUrl, outletsFor } from "@/lib/outlets"
+import { ImagePicker } from "@/components/ImagePicker"
+import { NewsPreview } from "@/components/NewsPreview"
 import {
   CONTRADICTION_PREFIX,
   diagnose,
@@ -294,6 +296,11 @@ export function NewsForm({ existing }: { existing?: ExistingNews }) {
       </section>
 
       <section className="card">
+        <h2>Imagen</h2>
+        <ImagePicker image={draft.image} title={draft.title} onChange={(image) => set("image", image)} />
+      </section>
+
+      <section className="card">
         <h2>Fuentes</h2>
         <p className="muted small">
           De dónde sale la información. Una fuente marcada como IA se muestra al lector, pero nunca cuenta como prueba.
@@ -459,6 +466,11 @@ export function NewsForm({ existing }: { existing?: ExistingNews }) {
             placeholder={NOTE_PLACEHOLDER[diagnosis]}
           />
         </label>
+      </section>
+
+      <section className="card">
+        <h2>Vista previa en la app</h2>
+        <NewsPreview draft={draft} />
       </section>
 
       {errors.length > 0 && (
