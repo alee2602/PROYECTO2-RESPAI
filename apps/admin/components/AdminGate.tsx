@@ -78,8 +78,7 @@ function NoAccess({ email }: { email: string | null }) {
         </p>
         <p className="muted">
           Publicar y cambiar el estado de validación de una noticia es una decisión humana reservada a personas
-          autorizadas. Si eres del equipo, pide que agreguen tu correo en <code>firestore.rules</code> y en{" "}
-          <code>apps/admin/lib/admins.ts</code>.
+          autorizadas. Si necesitas acceso, pídeselo a un administrador del portal.
         </p>
         <button className="btn" onClick={logOut}>
           Cerrar sesión y usar otra cuenta
