@@ -1,4 +1,5 @@
 import type { News } from "@respai/shared"
+import type { TopicAffinity } from "@/lib/affinity"
 import type { UserLocation } from "@/lib/locations"
 import { newsDate } from "@/lib/news"
 import { displayScope, rankNewsByLocation } from "@/lib/ranking"
@@ -30,7 +31,7 @@ export type FeedItem = {
   displayScope: News["scope"] // etiqueta Local/Nacional/Internacional, relativa a TU ubicación (ver displayScope())
 }
 
-export type RankFn = (news: News[], location: UserLocation) => FeedItem[]
+export type RankFn = (news: News[], location: UserLocation, affinity?: TopicAffinity) => FeedItem[]
 
 // Prominencia por posición (fallback mientras Rol 4 no la calcule).
 export function prominenceByPosition(index: number): Prominence {
@@ -83,21 +84,23 @@ export const fallbackFeed: RankFn = (news, location) => {
   }))
 }
 
-// Ranking real de Rol 4 (Etapa 1): ubicación + recencia + protección
-// anti-burbuja. La lógica de puntaje/orden vive en lib/ranking.ts (sin
-// depender de este archivo, para evitar un import circular); aquí solo se
-// arma el FeedItem[] con prominencia y explicación.
+// Ranking real de Rol 4: ubicación + validación + recencia + afinidad por tema,
+// con protección anti-burbuja. La lógica de puntaje/orden vive en
+// lib/ranking.ts (sin depender de este archivo, para evitar un import
+// circular); aquí solo se arma el FeedItem[] con prominencia y explicación.
 // `fallbackFeed` se deja exportado como referencia/respaldo, ya no se usa.
-export const rankFeed: RankFn = (news, location) => {
-  const { items, protectedIds } = rankNewsByLocation(news, location)
+export const rankFeed: RankFn = (news, location, affinity) => {
+  const { items, protectedIds, affinityTopics } = rankNewsByLocation(news, location, affinity)
   return items.map((n, i): FeedItem => {
     const isProtected = protectedIds.has(n.id)
+    const topic = affinityTopics.get(n.id)
+    let reason = reasonFor(n, location)
+    if (topic) reason += ` · sigues el tema ${topic}`
+    if (isProtected) reason += " · parte de la mezcla de alcances de tu feed"
     return {
       news: n,
       prominence: prominenceByPosition(i),
-      reason: isProtected
-        ? `${reasonFor(n, location)} · parte de la mezcla de alcances de tu feed`
-        : reasonFor(n, location),
+      reason,
       displayScope: displayScope(n, location),
       ...(isProtected ? { protectedByDiversity: true } : {}),
     }

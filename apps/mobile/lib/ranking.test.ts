@@ -3,12 +3,13 @@ import assert from "node:assert/strict"
 import type { News } from "@respai/shared"
 import type { UserLocation } from "./locations.ts"
 import { WEIGHTS, displayScope, rankNewsByLocation, scoreNews } from "./ranking.ts"
+import type { TopicAffinity } from "./affinity.ts"
 
 // Pruebas del criterio de aceptación de Rol 4 (docs/roles-equipo.md):
 // "Para cada ubicación simulada, el top del feed incluye local, nacional e
 // internacional cuando existen" y "un usuario muy aficionado a un tema sigue
-// viendo noticias importantes de otros alcances" (acá probado vía ubicación,
-// que es la única señal que usa este ranking en Etapa 1).
+// viendo noticias importantes de otros alcances" (probado vía ubicación y,
+// al final del archivo, vía afinidad por tema).
 
 let counter = 0
 function makeNews(overrides: Partial<News>): News {
@@ -257,9 +258,102 @@ test("scoreNews: desglose de una noticia local confirmada de tu región, la más
     createdAt: "2026-03-03T00:00:00.000Z",
   })
   const ref = Date.parse("2026-03-03T00:00:00.000Z")
-  assert.deepEqual(scoreNews(n, GUATE, ref), { location: 40, validation: 4, recency: 1, total: 45 })
+  assert.deepEqual(scoreNews(n, GUATE, ref), {
+    location: 40,
+    validation: 4,
+    recency: 1,
+    affinity: 0, // sin señales
+    affinityTopic: null,
+    total: 45,
+  })
 
   // La misma noticia, una vida media (48 h) más vieja que la más nueva del pool.
   const s = scoreNews(n, GUATE, ref + 48 * 3_600_000)
   assert.equal(s.recency, 0.5)
+})
+
+// ---------------------------------------------------------------------------
+// Afinidad por tema (rama rol4/afinidad).
+// ---------------------------------------------------------------------------
+
+// Fan extremo de deportes: el interés más alto posible.
+const FAN_DEPORTES: TopicAffinity = new Map([["deportes", 0.99]])
+
+test("criterio de aceptación: un fan extremo de un tema sigue viendo local, nacional e internacional arriba", () => {
+  const news = [
+    // Ocho noticias de deportes de su país: con la afinidad, todas le ganan
+    // por puntaje a la local de su región y llenarían solas el top.
+    ...Array.from({ length: 8 }, (_, i) =>
+      makeNews({ id: `deportes-${i}`, scope: "national", country: "Guatemala", topics: ["deportes"] })
+    ),
+    makeNews({ id: "local-salud", scope: "local", country: "Guatemala", region: "Quetzaltenango", topics: ["salud"] }),
+    makeNews({ id: "intl-clima", scope: "international", country: "Argentina", topics: ["clima"] }),
+  ]
+
+  const { items, protectedIds } = rankNewsByLocation(news, GUATE, FAN_DEPORTES)
+  const top6 = items.slice(0, 6)
+
+  assert.ok(top6.some((n) => n.id === "local-salud"), "la local de su región no puede desaparecer del top")
+  assert.ok(top6.some((n) => n.id === "intl-clima"), "la internacional no puede desaparecer del top")
+  assert.ok(protectedIds.has("local-salud") && protectedIds.has("intl-clima"), "entraron por el piso anti-burbuja")
+  assert.equal(items.length, news.length, "no se esconde ninguna noticia")
+})
+
+test("afinidad: un tema que lees mucho sube un escalón de cercanía y la tarjeta lo explica", () => {
+  const news = [
+    makeNews({ id: "local-otra-region", scope: "local", country: "Guatemala", region: "Petén", topics: ["salud"] }),
+    makeNews({ id: "intl-deportes", scope: "international", country: "Argentina", topics: ["deportes"] }),
+  ]
+
+  const sinAfinidad = rankNewsByLocation(news, GUATE)
+  assert.deepEqual(sinAfinidad.items.map((n) => n.id), ["local-otra-region", "intl-deportes"])
+  assert.equal(sinAfinidad.affinityTopics.size, 0)
+
+  const conAfinidad = rankNewsByLocation(news, GUATE, FAN_DEPORTES)
+  assert.deepEqual(conAfinidad.items.map((n) => n.id), ["intl-deportes", "local-otra-region"])
+  assert.equal(conAfinidad.affinityTopics.get("intl-deportes"), "deportes")
+})
+
+test("afinidad: nunca sube dos escalones de cercanía, ni en el peor caso", () => {
+  // Lo más favorecido posible de otro país (confirmada, la más nueva, afinidad
+  // máxima) contra lo menos favorecido de tu país (local de otra región, no
+  // verificada, la más vieja): gana tu país.
+  const news = [
+    makeNews({
+      id: "otro-pais-fan",
+      scope: "national",
+      country: "México",
+      topics: ["deportes"],
+      validationStatus: "confirmed",
+      createdAt: "2026-09-01T00:00:00.000Z",
+    }),
+    makeNews({
+      id: "tu-pais",
+      scope: "local",
+      country: "Guatemala",
+      region: "Petén",
+      topics: ["salud"],
+      validationStatus: "unverified",
+      createdAt: "2020-01-01T00:00:00.000Z",
+    }),
+  ]
+  const { items } = rankNewsByLocation(news, GUATE, new Map([["deportes", 1]])) // incluso con interés = 1
+  assert.deepEqual(items.map((n) => n.id), ["tu-pais", "otro-pais-fan"])
+})
+
+test("afinidad débil (una lectura suelta) no se anuncia en la tarjeta", () => {
+  const n = makeNews({ id: "x", scope: "international", country: "Argentina", topics: ["deportes"] })
+  const debil: TopicAffinity = new Map([["deportes", 0.1]]) // 1,5 puntos, menos que explainFrom
+  assert.equal(rankNewsByLocation([n], GUATE, debil).affinityTopics.size, 0)
+})
+
+test("pesos: la afinidad máxima alcanza para un escalón de cercanía, nunca para dos", () => {
+  const loc = Object.values(WEIGHTS.location).sort((a, b) => b - a)
+  const minStep = Math.min(...loc.slice(0, -1).map((v, i) => v - loc[i + 1]))
+  const maxVal = Math.max(...Object.values(WEIGHTS.validation))
+  assert.ok(WEIGHTS.affinity.max > minStep, "si no alcanza un escalón, la afinidad casi no se notaría")
+  assert.ok(
+    WEIGHTS.affinity.max + maxVal + WEIGHTS.recency.max <= 2 * minStep,
+    "la afinidad no debe poder saltar dos escalones de cercanía"
+  )
 })

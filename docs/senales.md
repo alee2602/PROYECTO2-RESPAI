@@ -38,7 +38,9 @@ Ejemplo real (capturado en la prueba de la rama `rol1/senales`):
 - **`read_time`**: se cuenta solo el tiempo con la pantalla visible. Se guarda al salir del lector **y** cada vez que la app pasa a segundo plano (el celular puede cerrar la PWA sin avisar). Por eso **una misma apertura puede dejar varios `read_time`**: sumarlos por `newsId`. Lecturas de menos de 2 s no se registran (toques accidentales); se recorta a 30 min (pantalla olvidada).
 - **`share`**: solo si se compartió de verdad. Si la persona abre la hoja de compartir y la cancela, no se registra.
 
-## Recomendaciones para Rol 4 (no implementado aquí)
+## Recomendaciones para Rol 4
+
+Implementadas el 2026-10-11 en `apps/mobile/lib/affinity.ts` y `lib/ranking.ts`. Pesos y ejemplos en `docs/ranking.md`.
 
 - `read_time` es mejor señal de interés que `open` (un `open` sin `read_time` probablemente fue un toque y salir).
 - La afinidad por tema **no debe** desplazar el piso anti-burbuja: noticias locales, nacionales e internacionales importantes siguen arriba aunque el usuario nunca abra esos temas (CLAUDE.md, sección 3).
