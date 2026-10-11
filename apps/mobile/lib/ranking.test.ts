@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import type { News } from "@respai/shared"
 import type { UserLocation } from "./locations.ts"
-import { displayScope, rankNewsByLocation } from "./ranking.ts"
+import { WEIGHTS, displayScope, rankNewsByLocation, scoreNews } from "./ranking.ts"
 
 // Pruebas del criterio de aceptación de Rol 4 (docs/roles-equipo.md):
 // "Para cada ubicación simulada, el top del feed incluye local, nacional e
@@ -163,4 +163,103 @@ test("displayScope: local solo si coincide país Y región; si no, cae a naciona
 test("displayScope: sin país (ej. precio internacional del café) siempre es internacional", () => {
   const cafe = makeNews({ id: "cafe", scope: "international" })
   assert.equal(displayScope(cafe, { country: "Guatemala", region: "Quetzaltenango" }), "international")
+})
+
+// ---------------------------------------------------------------------------
+// Paso a puntaje numérico (rama rol4/ranking-puntaje): el orden NO debe
+// cambiar respecto al comparador anterior (cercanía → validación → fecha).
+// ---------------------------------------------------------------------------
+
+// Copia literal del comparador anterior, como referencia de "comportamiento
+// de antes". Menor = más relevante.
+function oldCompare(a: News, b: News, loc: UserLocation): number {
+  const proximity = (n: News) => {
+    const sameCountry = n.country === loc.country
+    const sameRegion = Boolean(loc.region) && n.region === loc.region
+    if (n.scope === "local" && sameRegion) return 0
+    if (n.scope === "national" && sameCountry) return 1
+    if (n.scope === "international" && sameCountry) return 1
+    if (n.scope === "local" && sameCountry) return 2
+    if (n.scope === "international") return 3
+    return 4
+  }
+  const validation = (n: News) =>
+    n.validationStatus === "confirmed" ? 0 : n.validationStatus === "in_progress" ? 1 : 2
+  return (
+    proximity(a) - proximity(b) ||
+    validation(a) - validation(b) ||
+    (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)
+  )
+}
+
+test("el puntaje numérico ordena exactamente igual que el comparador anterior", () => {
+  // Generador pseudoaleatorio con semilla fija: la prueba es repetible.
+  let seed = 42
+  const rand = () => ((seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648)
+  const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]
+
+  const places = [
+    { country: "Guatemala", region: "Quetzaltenango" },
+    { country: "Guatemala", region: "Sacatepéquez" },
+    { country: "México", region: "Jalisco" },
+    { country: "España", region: undefined },
+    { country: undefined, region: undefined },
+  ]
+  const locations: UserLocation[] = [GUATE, { country: "Guatemala", region: null }, { country: "España", region: null }]
+  const start = Date.parse("2026-01-01T00:00:00.000Z")
+
+  for (let round = 0; round < 300; round++) {
+    const loc = pick(locations)
+    const pool = Array.from({ length: 2 + Math.floor(rand() * 12) }, () => {
+      const place = pick(places)
+      return makeNews({
+        scope: pick(["local", "national", "international"] as const),
+        country: place.country,
+        region: place.region,
+        validationStatus: pick(["confirmed", "in_progress", "unverified"] as const),
+        // Pocas fechas posibles a propósito, para forzar empates de fecha.
+        createdAt: new Date(start + Math.floor(rand() * 20) * 7 * 3_600_000).toISOString(),
+      })
+    })
+
+    const expected = [...pool].sort((a, b) => oldCompare(a, b, loc)).map((n) => n.id)
+    const ref = Math.max(...pool.map((n) => Date.parse(n.createdAt)))
+    const actual = [...pool]
+      .sort((a, b) => scoreNews(b, loc, ref).total - scoreNews(a, loc, ref).total)
+      .map((n) => n.id)
+    assert.deepEqual(actual, expected, `orden distinto en la ronda ${round}`)
+  }
+})
+
+test("pesos: cada escalón de un criterio vale más que todo lo que viene después", () => {
+  // Si alguien cambia WEIGHTS y rompe esto, el orden deja de ser
+  // cercanía → validación → fecha. Puede ser intencional (p. ej. al sumar
+  // afinidad), pero entonces se cambia esta prueba y se anota en docs/ranking.md.
+  const loc = Object.values(WEIGHTS.location).sort((a, b) => b - a)
+  const val = Object.values(WEIGHTS.validation).sort((a, b) => b - a)
+  const maxVal = val[0]
+  const maxRec = WEIGHTS.recency.max
+
+  for (let i = 0; i < loc.length - 1; i++) {
+    assert.ok(loc[i] - loc[i + 1] > maxVal + maxRec, `escalón de cercanía ${loc[i]}→${loc[i + 1]} muy chico`)
+  }
+  for (let i = 0; i < val.length - 1; i++) {
+    assert.ok(val[i] - val[i + 1] > maxRec, `escalón de validación ${val[i]}→${val[i + 1]} muy chico`)
+  }
+})
+
+test("scoreNews: desglose de una noticia local confirmada de tu región, la más nueva del pool", () => {
+  const n = makeNews({
+    scope: "local",
+    country: "Guatemala",
+    region: "Quetzaltenango",
+    validationStatus: "confirmed",
+    createdAt: "2026-03-03T00:00:00.000Z",
+  })
+  const ref = Date.parse("2026-03-03T00:00:00.000Z")
+  assert.deepEqual(scoreNews(n, GUATE, ref), { location: 40, validation: 4, recency: 1, total: 45 })
+
+  // La misma noticia, una vida media (48 h) más vieja que la más nueva del pool.
+  const s = scoreNews(n, GUATE, ref + 48 * 3_600_000)
+  assert.equal(s.recency, 0.5)
 })

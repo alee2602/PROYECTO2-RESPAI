@@ -317,3 +317,17 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** la imagen elegida tenía licencia no comercial. Se dejó permitido, porque es un proyecto de curso sin fines de lucro, y se anotó en `docs/imagenes.md` cómo filtrar a licencias comerciales si hiciera falta. Se sugiere a Rol 1 mostrar "Ilustrativa" también para `free_attributed`, para que el aviso no dependa del texto de la atribución.
 
 **Pendiente:** cierre del rol (docs y estado técnico) y desplegar el portal en la nube para la demo.
+
+## 2026-10-11 — Ranking pasa a puntaje numérico con pesos documentados (Rol 4, Etapa 3)
+
+**Se esperaba:** poder agregar la afinidad por tema (señales de comportamiento) al ranking. El ranking comparaba criterio por criterio (cercanía, luego validación, luego fecha), así que no tenía dónde "sumar" un criterio nuevo con un peso justificable.
+
+**Qué pasó:**
+- `apps/mobile/lib/ranking.ts` ahora calcula un puntaje `cercanía + validación + recencia` con pesos explícitos (`WEIGHTS`) y expone el desglose por noticia (`scoreNews`). El piso anti-burbuja no cambió y se sigue aplicando después del puntaje.
+- Los pesos se eligieron para que el orden sea **idéntico** al anterior: cada escalón de un criterio vale más que el máximo de los criterios siguientes. Para comprobarlo no bastaban las 8 pruebas existentes, así que se agregó una que compara el orden nuevo contra una copia del comparador anterior en 300 pools aleatorios con semilla fija (con empates de fecha forzados). También se agregó una prueba de la desigualdad entre escalones y otra del desglose de una noticia. Resultado: 11 de 11 pasan y `tsc` pasa.
+- La recencia se calcula contra la noticia más nueva del pool, no contra la hora actual, para que el ranking siga siendo una función pura y repetible en las pruebas.
+- `next build` local falló con `auth/invalid-api-key` porque esta copia no tiene `.env.local` (la config de Firebase vive en Vercel). No tiene relación con el cambio: la comprobación del build queda en el preview de Vercel del PR.
+
+**Qué se cambió y por qué:** solo la forma de calcular el orden, no el resultado. Tabla de pesos, motivo de cada número e historial de cambios en `docs/ranking.md` (evidencia que pide el rol: "los pesos están documentados y cada cambio de peso queda con su motivo").
+
+**Pendiente:** rama `rol4/afinidad` para leer `users/{uid}/signals` y sumar la afinidad por tema como un componente más del puntaje, con pruebas de que no desplaza el piso anti-burbuja.

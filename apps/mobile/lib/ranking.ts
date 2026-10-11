@@ -10,56 +10,89 @@ function newsDate(n: News): string {
 }
 
 // ---------------------------------------------------------------------------
-// Ranking de Rol 4, Etapa 1: ubicación + recencia, con protección anti-burbuja
-// (CLAUDE.md sección 3). Sin modelo, sin esconder ninguna noticia — solo
-// ordena y, cuando hace falta, promueve alcances que faltarían arriba.
+// Ranking de Rol 4: puntaje por reglas (cercanía + validación + recencia), con
+// protección anti-burbuja (CLAUDE.md sección 3). Sin modelo, sin esconder
+// ninguna noticia — solo ordena y, cuando hace falta, promueve alcances que
+// faltarían arriba.
 //
 // Deliberadamente sin dependencias de lib/feed.ts (que sí importa de aquí)
 // para evitar un import circular: este archivo solo conoce `News` y
 // `UserLocation`, nunca `FeedItem`/`RankFn`.
 //
 // Pendiente (Etapa 3): afinidad por tema a partir de `users/{uid}/signals`
-// (ver docs/senales.md). Se agrega como una señal más en el puntaje, nunca
-// desplazando el piso anti-burbuja de abajo.
+// (ver docs/senales.md). Se agrega como un componente más de `scoreNews`,
+// con su peso en WEIGHTS, nunca desplazando el piso anti-burbuja de abajo.
 // ---------------------------------------------------------------------------
 
 // Cuántas posiciones arriba del feed cuentan como "el tope" para la
 // protección anti-burbuja (hero + large + el inicio de normal).
 const TOP_WINDOW = 6
 
-// Puntaje de cercanía a la ubicación elegida. Menor = más relevante.
-function locationScore(n: News, loc: UserLocation): number {
+// ---------------------------------------------------------------------------
+// Puntaje numérico (mayor = más relevante). Tabla de pesos y motivo de cada
+// cambio en docs/ranking.md — si cambias un número aquí, anótalo allá.
+//
+// Los pesos actuales están elegidos para reproducir EXACTAMENTE el orden
+// anterior (cercanía, luego validación, luego fecha): cada escalón de un
+// criterio vale más que el máximo de todos los que vienen después. Lo
+// comprueba una prueba en ranking.test.ts. Pasar a puntos permite sumar
+// después la afinidad por tema como un componente más con su propio peso.
+// ---------------------------------------------------------------------------
+export const WEIGHTS = {
+  location: {
+    localSameRegion: 40, // local de tu región
+    sameCountry: 30, // nacional de tu país, o internacional que ocurre en tu país
+    localSameCountry: 20, // local de otra región de tu país
+    international: 10, // internacional de otro país (o sin país)
+    otherCountry: 0, // local o nacional de otro país
+  },
+  // Entre noticias igual de cercanas, la más confirmada va primero. NO es un
+  // filtro — una `unverified` sigue apareciendo siempre que exista, solo deja
+  // de ganarle a algo igual de relevante y mejor sustentado por pura
+  // coincidencia de ubicación. (Encontrado probando con datos reales: una
+  // noticia de fuente única sin confirmar terminó de "hero" por ser la única
+  // coincidencia de país para esa ubicación — ver docs/ciclos.md, 2026-10-10.)
+  validation: { confirmed: 4, in_progress: 2, unverified: 0 },
+  // Recencia entre 0 y `max`, relativa a la noticia más nueva del pool (no a
+  // la hora actual, para que el ranking sea una función pura y repetible):
+  // la más nueva vale `max`, una `halfLifeHours` más vieja vale la mitad.
+  recency: { max: 1, halfLifeHours: 48 },
+} as const
+
+export type ScoreBreakdown = { location: number; validation: number; recency: number; total: number }
+
+function locationPoints(n: News, loc: UserLocation): number {
+  const w = WEIGHTS.location
   const sameCountry = n.country === loc.country
   const sameRegion = Boolean(loc.region) && n.region === loc.region
-  if (n.scope === "local" && sameRegion) return 0
-  if (n.scope === "national" && sameCountry) return 1
-  if (n.scope === "international" && sameCountry) return 1
-  if (n.scope === "local" && sameCountry) return 2
-  if (n.scope === "international") return 3
-  return 4 // local o nacional de otro país
+  if (n.scope === "local" && sameRegion) return w.localSameRegion
+  if (n.scope === "national" && sameCountry) return w.sameCountry
+  if (n.scope === "international" && sameCountry) return w.sameCountry
+  if (n.scope === "local" && sameCountry) return w.localSameCountry
+  if (n.scope === "international") return w.international
+  return w.otherCountry
 }
 
-// Desempate por validación: entre noticias igual de cercanas, la más
-// confirmada va primero. NO es un filtro — una `unverified` sigue
-// apareciendo siempre que exista, nunca se oculta ni se saca del feed, solo
-// deja de ganarle a algo igual de relevante y mejor sustentado por pura
-// coincidencia de ubicación. (Encontrado probando con datos reales: una
-// noticia de fuente única sin confirmar terminó de "hero" por ser la única
-// coincidencia de país para esa ubicación — ver docs/ciclos.md, 2026-10-10.)
-function validationRank(n: News): number {
-  if (n.validationStatus === "confirmed") return 0
-  if (n.validationStatus === "in_progress") return 1
-  return 2 // unverified
+function recencyPoints(n: News, referenceMs: number): number {
+  const t = Date.parse(newsDate(n))
+  if (Number.isNaN(t)) return 0 // fecha ilegible: sin bono de recencia, pero no se oculta
+  const ageHours = Math.max(0, (referenceMs - t) / 3_600_000)
+  const { max, halfLifeHours } = WEIGHTS.recency
+  return (max * halfLifeHours) / (halfLifeHours + ageHours)
 }
 
-function compare(a: News, b: News, loc: UserLocation): number {
-  const sa = locationScore(a, loc)
-  const sb = locationScore(b, loc)
-  if (sa !== sb) return sa - sb
-  const va = validationRank(a)
-  const vb = validationRank(b)
-  if (va !== vb) return va - vb
-  return newsDate(b).localeCompare(newsDate(a)) // más reciente primero
+// Desglose del puntaje de una noticia para una ubicación. `referenceMs` es la
+// fecha de la noticia más nueva del pool (ver WEIGHTS.recency).
+export function scoreNews(n: News, loc: UserLocation, referenceMs: number): ScoreBreakdown {
+  const location = locationPoints(n, loc)
+  const validation = WEIGHTS.validation[n.validationStatus] ?? 0
+  const recency = recencyPoints(n, referenceMs)
+  return { location, validation, recency, total: location + validation + recency }
+}
+
+function newestDateMs(news: News[]): number {
+  const times = news.map((n) => Date.parse(newsDate(n))).filter((t) => !Number.isNaN(t))
+  return times.length > 0 ? Math.max(...times) : 0
 }
 
 // Promueve al menos una noticia de cada alcance (si existe en todo el pool)
@@ -102,10 +135,13 @@ function applyDiversityFloor(sorted: News[]): { items: News[]; protectedIds: Set
 
 export type RankedNews = { items: News[]; protectedIds: Set<string> }
 
-// Ordena por ubicación + recencia y aplica el piso anti-burbuja. No conoce
-// FeedItem/prominencia: eso lo arma lib/feed.ts a partir de este resultado.
+// Ordena por puntaje (cercanía + validación + recencia) y aplica el piso
+// anti-burbuja. No conoce FeedItem/prominencia: eso lo arma lib/feed.ts a
+// partir de este resultado.
 export function rankNewsByLocation(news: News[], location: UserLocation): RankedNews {
-  const sorted = [...news].sort((a, b) => compare(a, b, location))
+  const referenceMs = newestDateMs(news)
+  const totals = new Map(news.map((n) => [n, scoreNews(n, location, referenceMs).total]))
+  const sorted = [...news].sort((a, b) => totals.get(b)! - totals.get(a)!)
   return applyDiversityFloor(sorted)
 }
 
