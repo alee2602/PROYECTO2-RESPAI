@@ -27,6 +27,23 @@ Detalle de las reglas:
 
 Si el navegador muestra una versión vieja después de cambiar de rama, recarga forzando con `Ctrl + Shift + R`.
 
+## Desplegar en Vercel
+
+Mismo proceso que `apps/mobile` (ver su README): un proyecto de Vercel aparte, conectado al mismo repo. Lo hace quien administra Vercel y Firebase (Rol 4), una sola vez:
+
+1. En [vercel.com/new](https://vercel.com/new), importar otra vez el repo `PROYECTO2-RESPAI` como un **proyecto nuevo**, por ejemplo `respainews-admin`.
+2. **Root Directory:** `apps/admin`. Framework: Next.js (lo detecta solo). Dejar activado "Include files outside of the Root Directory" (necesario para `packages/shared` y el `package-lock.json` de la raíz).
+3. **Environment Variables:** las 6 `NEXT_PUBLIC_FIREBASE_*` de `.env.example`, con los **mismos valores que el proyecto de la app**, para Production y Preview.
+4. Deploy. Vercel da una URL tipo `https://<proyecto>.vercel.app`.
+5. **Firebase Console → Authentication → Settings → Authorized domains:** agregar ese dominio. Sin esto, el login falla con "Este dominio no está autorizado en Firebase Authentication" (el portal lo dice en pantalla).
+
+No hace falta tocar las reglas de Firestore: el portal escribe con la sesión del admin, igual que en localhost.
+
+**Verificación después del despliegue:**
+- Entrar con un correo admin → se ve la lista de noticias.
+- Entrar con un correo no admin → "Sin acceso al portal".
+- Publicar una noticia de prueba → aparece en la app desplegada. Después, borrarla desde el portal.
+
 ## Pruebas
 
 ```bash
