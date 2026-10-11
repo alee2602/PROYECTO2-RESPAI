@@ -1,5 +1,8 @@
 import type { News } from "@respai/shared"
 import type { UserLocation } from "@/lib/locations"
+// Ruta relativa con extensión (no "@/lib/..."): este import sí existe en
+// ejecución y tiene que resolverse también en `node --test`.
+import { newsAffinity, type TopicAffinity } from "./affinity.ts"
 
 // Deliberadamente sin importar lib/news.ts (que inicializa el cliente de
 // Firebase): este módulo es puro (sin red, sin Firebase) para poder probarlo
@@ -10,18 +13,18 @@ function newsDate(n: News): string {
 }
 
 // ---------------------------------------------------------------------------
-// Ranking de Rol 4: puntaje por reglas (cercanía + validación + recencia), con
-// protección anti-burbuja (CLAUDE.md sección 3). Sin modelo, sin esconder
-// ninguna noticia — solo ordena y, cuando hace falta, promueve alcances que
-// faltarían arriba.
+// Ranking de Rol 4: puntaje por reglas (cercanía + validación + recencia +
+// afinidad por tema), con protección anti-burbuja (CLAUDE.md sección 3). Sin
+// modelo, sin esconder ninguna noticia — solo ordena y, cuando hace falta,
+// promueve alcances que faltarían arriba.
 //
 // Deliberadamente sin dependencias de lib/feed.ts (que sí importa de aquí)
 // para evitar un import circular: este archivo solo conoce `News` y
 // `UserLocation`, nunca `FeedItem`/`RankFn`.
 //
-// Pendiente (Etapa 3): afinidad por tema a partir de `users/{uid}/signals`
-// (ver docs/senales.md). Se agrega como un componente más de `scoreNews`,
-// con su peso en WEIGHTS, nunca desplazando el piso anti-burbuja de abajo.
+// La afinidad por tema sale de `users/{uid}/signals` (lib/affinity.ts) y es un
+// componente más del puntaje. El piso anti-burbuja se aplica DESPUÉS del
+// puntaje, así que la afinidad nunca lo desplaza.
 // ---------------------------------------------------------------------------
 
 // Cuántas posiciones arriba del feed cuentan como "el tope" para la
@@ -32,11 +35,13 @@ const TOP_WINDOW = 6
 // Puntaje numérico (mayor = más relevante). Tabla de pesos y motivo de cada
 // cambio en docs/ranking.md — si cambias un número aquí, anótalo allá.
 //
-// Los pesos actuales están elegidos para reproducir EXACTAMENTE el orden
-// anterior (cercanía, luego validación, luego fecha): cada escalón de un
-// criterio vale más que el máximo de todos los que vienen después. Lo
-// comprueba una prueba en ranking.test.ts. Pasar a puntos permite sumar
-// después la afinidad por tema como un componente más con su propio peso.
+// Sin afinidad (usuario sin señales), el orden es exactamente cercanía, luego
+// validación, luego fecha: cada escalón de un criterio vale más que el máximo
+// de todos los que vienen después. Lo comprueba una prueba en ranking.test.ts.
+//
+// La afinidad rompe eso A PROPÓSITO, pero acotada: su máximo (< 15) puede
+// subir una noticia un escalón de cercanía (10), nunca dos (20). También lo
+// comprueba una prueba.
 // ---------------------------------------------------------------------------
 export const WEIGHTS = {
   location: {
@@ -57,9 +62,20 @@ export const WEIGHTS = {
   // la hora actual, para que el ranking sea una función pura y repetible):
   // la más nueva vale `max`, una `halfLifeHours` más vieja vale la mitad.
   recency: { max: 1, halfLifeHours: 48 },
+  // Afinidad por tema: `max` × interés (entre 0 y 1, nunca llega a 1; ver
+  // lib/affinity.ts). Puede saltar un escalón de cercanía, nunca dos.
+  // `explainFrom`: desde cuántos puntos la tarjeta dice "Sigues el tema...".
+  affinity: { max: 15, explainFrom: 3 },
 } as const
 
-export type ScoreBreakdown = { location: number; validation: number; recency: number; total: number }
+export type ScoreBreakdown = {
+  location: number
+  validation: number
+  recency: number
+  affinity: number
+  affinityTopic: string | null // tema que aportó la afinidad (para explicarlo)
+  total: number
+}
 
 function locationPoints(n: News, loc: UserLocation): number {
   const w = WEIGHTS.location
@@ -82,12 +98,27 @@ function recencyPoints(n: News, referenceMs: number): number {
 }
 
 // Desglose del puntaje de una noticia para una ubicación. `referenceMs` es la
-// fecha de la noticia más nueva del pool (ver WEIGHTS.recency).
-export function scoreNews(n: News, loc: UserLocation, referenceMs: number): ScoreBreakdown {
+// fecha de la noticia más nueva del pool (ver WEIGHTS.recency). Sin
+// `affinity` (o vacía), la afinidad vale 0.
+export function scoreNews(
+  n: News,
+  loc: UserLocation,
+  referenceMs: number,
+  affinity: TopicAffinity = new Map()
+): ScoreBreakdown {
   const location = locationPoints(n, loc)
   const validation = WEIGHTS.validation[n.validationStatus] ?? 0
   const recency = recencyPoints(n, referenceMs)
-  return { location, validation, recency, total: location + validation + recency }
+  const interest = newsAffinity(n.topics, affinity)
+  const affinityPoints = WEIGHTS.affinity.max * Math.min(Math.max(interest.value, 0), 0.999)
+  return {
+    location,
+    validation,
+    recency,
+    affinity: affinityPoints,
+    affinityTopic: interest.topic,
+    total: location + validation + recency + affinityPoints,
+  }
 }
 
 function newestDateMs(news: News[]): number {
@@ -133,16 +164,32 @@ function applyDiversityFloor(sorted: News[]): { items: News[]; protectedIds: Set
   return { items, protectedIds }
 }
 
-export type RankedNews = { items: News[]; protectedIds: Set<string> }
+export type RankedNews = {
+  items: News[]
+  protectedIds: Set<string>
+  // newsId → tema por el que la afinidad la subió de forma notable
+  // (≥ WEIGHTS.affinity.explainFrom puntos), para decirlo en la tarjeta.
+  affinityTopics: Map<string, string>
+}
 
-// Ordena por puntaje (cercanía + validación + recencia) y aplica el piso
-// anti-burbuja. No conoce FeedItem/prominencia: eso lo arma lib/feed.ts a
-// partir de este resultado.
-export function rankNewsByLocation(news: News[], location: UserLocation): RankedNews {
+// Ordena por puntaje (cercanía + validación + recencia + afinidad) y aplica el
+// piso anti-burbuja. No conoce FeedItem/prominencia: eso lo arma lib/feed.ts a
+// partir de este resultado. Sin `affinity`, ordena igual que antes de existir.
+export function rankNewsByLocation(
+  news: News[],
+  location: UserLocation,
+  affinity: TopicAffinity = new Map()
+): RankedNews {
   const referenceMs = newestDateMs(news)
-  const totals = new Map(news.map((n) => [n, scoreNews(n, location, referenceMs).total]))
-  const sorted = [...news].sort((a, b) => totals.get(b)! - totals.get(a)!)
-  return applyDiversityFloor(sorted)
+  const scores = new Map(news.map((n) => [n, scoreNews(n, location, referenceMs, affinity)]))
+  const sorted = [...news].sort((a, b) => scores.get(b)!.total - scores.get(a)!.total)
+
+  const affinityTopics = new Map<string, string>()
+  for (const [n, s] of scores) {
+    if (s.affinityTopic && s.affinity >= WEIGHTS.affinity.explainFrom) affinityTopics.set(n.id, s.affinityTopic)
+  }
+
+  return { ...applyDiversityFloor(sorted), affinityTopics }
 }
 
 // `news.scope` describe el alcance PROPIO de la noticia (para qué tan lejos

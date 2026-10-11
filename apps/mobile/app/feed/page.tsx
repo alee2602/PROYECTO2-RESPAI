@@ -3,22 +3,35 @@
 import { useEffect, useState } from "react"
 import { AppHeader } from "@/components/AppHeader"
 import { NewsCard } from "@/components/NewsCard"
+import type { TopicAffinity } from "@/lib/affinity"
+import { useUser } from "@/lib/auth"
 import { fetchPublishedNews, type PublishedNews } from "@/lib/news"
 import { rankFeed } from "@/lib/feed"
 import { useLocation } from "@/lib/profile"
+import { fetchTopicAffinity } from "@/lib/userAffinity"
 
 export default function FeedPage() {
   const location = useLocation()
+  const user = useUser()
   const [data, setData] = useState<PublishedNews | null>(null)
+  const [affinity, setAffinity] = useState<TopicAffinity>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    fetchPublishedNews()
-      .then((d) => {
+    // Noticias y afinidad en paralelo; se muestra todo junto para que el feed
+    // no salte de orden al llegar la afinidad. Si las señales no se pueden
+    // leer, el feed se ordena sin afinidad (como antes), no falla.
+    const affinityPromise = fetchTopicAffinity(user.uid).catch((e) => {
+      console.warn("No se pudo calcular la afinidad por tema", e?.code ?? e)
+      return new Map() as TopicAffinity
+    })
+    Promise.all([fetchPublishedNews(), affinityPromise])
+      .then(([d, a]) => {
         if (!cancelled) {
           setData(d)
+          setAffinity(a)
           setError(null)
         }
       })
@@ -26,10 +39,11 @@ export default function FeedPage() {
     return () => {
       cancelled = true
     }
-  }, [reloadKey])
+  }, [reloadKey, user.uid])
 
-  // El orden depende de la ubicación simulada: al cambiarla, el feed se reordena.
-  const items = data ? rankFeed(data.items, location) : []
+  // El orden depende de la ubicación simulada y de los temas que más lees:
+  // al cambiar la ubicación, el feed se reordena.
+  const items = data ? rankFeed(data.items, location, affinity) : []
   const hero = items.filter((i) => i.prominence === "hero")
   const large = items.filter((i) => i.prominence === "large")
   const normal = items.filter((i) => i.prominence === "normal")
@@ -103,9 +117,10 @@ export default function FeedPage() {
             <footer className="feed-footnote">
               <p>
                 <strong>Cómo se ordena este feed:</strong> primero lo más cercano a tu ubicación simulada y lo más
-                reciente. No se esconde ninguna noticia: las de otros países y alcances siguen aquí abajo. Siempre se
-                mezcla al menos una noticia local, nacional e internacional arriba, aunque no coincidan con tu
-                ubicación.
+                reciente. Si lees mucho de un tema, sus noticias suben un poco (la tarjeta lo dice), pero nunca por
+                encima de la mezcla de alcances. No se esconde ninguna noticia: las de otros países y alcances siguen
+                aquí abajo. Siempre se mezcla al menos una noticia local, nacional e internacional arriba, aunque no
+                coincidan con tu ubicación ni con tus temas.
               </p>
               {data && data.hidden > 0 && (
                 <p>

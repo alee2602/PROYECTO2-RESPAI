@@ -331,3 +331,20 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** solo la forma de calcular el orden, no el resultado. Tabla de pesos, motivo de cada número e historial de cambios en `docs/ranking.md` (evidencia que pide el rol: "los pesos están documentados y cada cambio de peso queda con su motivo").
 
 **Pendiente:** rama `rol4/afinidad` para leer `users/{uid}/signals` y sumar la afinidad por tema como un componente más del puntaje, con pruebas de que no desplaza el piso anti-burbuja.
+
+## 2026-10-11 — Afinidad por tema a partir de las señales (Rol 4, Etapa 3)
+
+**Se esperaba:** que el feed use las señales que Rol 1 ya guarda (`open`, `read_time`, `share`) para subir los temas que la persona lee, sin modelo y sin que eso esconda noticias importantes de otros alcances.
+
+**Qué pasó:**
+- `apps/mobile/lib/affinity.ts` (puro, sin Firebase) convierte señales en interés por tema: lectura visible con tope de 1 por noticia, `open` sin lectura vale poco (0,2), `share` suma 1, y por tema se satura (`suma / (suma + 2)`) para que una lectura suelta no reordene el feed. `lib/userAffinity.ts` lee las últimas 100 señales, con caché de 5 min.
+- En `ranking.ts` la afinidad es un componente más del puntaje: `15 × interés`. **Decisión de peso:** mayor que un escalón de cercanía (10), para que se note, y menor que dos (20), para que un tema favorito de otro país nunca le gane a una noticia de tu país. El piso anti-burbuja se sigue aplicando después.
+- Transparencia: si la afinidad aporta 3 puntos o más, la tarjeta agrega "sigues el tema X", y la nota al pie del feed explica la regla.
+- Si leer las señales falla, el feed se ordena sin afinidad, como antes, en vez de mostrar un error.
+- 13 pruebas nuevas (24 en total), todas pasaron al primer intento. Entre ellas, el criterio de aceptación del rol: un fan extremo de deportes con 8 noticias de deportes de su país sigue viendo la local de su región y la internacional en el top 6, porque entran por el piso anti-burbuja. También hay una prueba de que la afinidad nunca sube dos escalones, ni con interés = 1. `tsc` pasa; `next build` compila y luego falla localmente solo por la falta de `.env.local`, igual que en el ciclo anterior.
+
+**Qué se cambió y por qué:** la equivalencia exacta con el orden anterior ahora solo vale para usuarios sin señales. La afinidad la rompe a propósito, acotada a un escalón, y una prueba nueva fija ese límite. Detalle de pesos y tabla de ejemplos en `docs/ranking.md`.
+
+**Limitación conocida:** con las 12 noticias semilla casi cada tema tiene una sola noticia. Leerla sube *esa misma* noticia, que ya leíste, así que el efecto se demuestra poco. Para la demo hacen falta noticias reales adicionales concentradas en 2 o 3 temas (ya anotado en `docs/decisiones-pendientes.md`).
+
+**Pendiente:** probar en el preview de Vercel con una cuenta que lea 2 o 3 noticias de un mismo tema (más de 1 minuto cada una). Después de 5 minutos, o al recargar la app, el feed debe subirlas y mostrar "sigues el tema ...".
