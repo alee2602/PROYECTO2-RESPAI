@@ -9,13 +9,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Lista de correos con acceso al portal admin. Agregar aquí el correo de
-    // quien tenga el Rol 3 cuando se confirme con el equipo.
+    // Quién es admin se decide con DATOS, no con código (así ningún correo
+    // de compañero queda escrito en el repo). Un correo es admin si existe
+    // un documento admins/{correo} en Firestore. Esos documentos se crean a
+    // mano desde Firebase Console → Firestore → Data (nadie puede crearlos
+    // ni borrarlos desde el cliente, ver reglas de /admins más abajo).
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email in [
-        'malejandras2004@gmail.com',
-        'biancalderon01.15@gmail.com'
-      ];
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+
+    // Una persona solo puede leer SU PROPIO documento de admin (para que el
+    // portal sepa qué pantalla mostrarle) — nunca la lista completa de
+    // correos admin, eso seguiría siendo visible solo desde Firebase Console.
+    match /admins/{email} {
+      allow read: if isSignedIn() && request.auth.token.email == email;
+      allow write: if false;
     }
 
     // News: cualquier usuario logueado puede leer. Solo admins pueden

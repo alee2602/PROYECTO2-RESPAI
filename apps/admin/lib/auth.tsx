@@ -11,7 +11,7 @@ import {
   type User,
 } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import { isAdminEmail } from "@/lib/admins"
+import { checkIsAdmin } from "@/lib/admins"
 
 // Sesión del portal. Mismo método que la PWA (signInWithPopup, ver
 // docs/ciclos.md 2026-09-30); aquí además se sabe si el correo es admin.
@@ -28,16 +28,40 @@ const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminLoading, setAdminLoading] = useState(false)
 
   useEffect(
     () =>
       onAuthStateChanged(auth, (u) => {
         setUser(u)
-        setLoading(false)
+        setAuthLoading(false)
       }),
     []
   )
+
+  // El chequeo de admin ahora es una lectura a Firestore (ver lib/admins.ts),
+  // no una lista en memoria — por eso es async y necesita su propio loading
+  // para que <AdminGate> no muestre "sin acceso" un instante antes de saber.
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false)
+      setAdminLoading(false)
+      return
+    }
+    let cancelled = false
+    setAdminLoading(true)
+    checkIsAdmin(user.email).then((ok) => {
+      if (!cancelled) {
+        setIsAdmin(ok)
+        setAdminLoading(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   async function signIn() {
     await setPersistence(auth, browserLocalPersistence)
@@ -50,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth)
   }
 
-  const isAdmin = isAdminEmail(user?.email)
+  const loading = authLoading || adminLoading
 
   return <AuthContext value={{ user, isAdmin, loading, signIn, logOut }}>{children}</AuthContext>
 }

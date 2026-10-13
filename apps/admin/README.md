@@ -12,7 +12,9 @@ Dueño: Rol 3 (Portal admin), sobre el esquema de Rol 4 (`packages/shared`).
 | Nueva noticia | `/nueva` | Formulario completo: contenido, alcance, imagen, fuentes, validación y vista previa. Publicar o guardar como borrador |
 | Editar | `/editar/[id]` | El mismo formulario con la noticia cargada. Guardar cambios, publicar, despublicar o borrar |
 
-Solo entran los correos de `lib/admins.ts`, que es espejo de `isAdmin()` en `/firestore.rules`. Si se agrega o quita un admin, hay que cambiar **los dos archivos en el mismo PR**. La seguridad real la ponen las reglas de Firestore; la lista del portal solo decide qué pantalla se ve.
+Solo entran los correos que existan como documento en la colección **`admins`** de Firestore (el ID del documento es el correo) — no están escritos en el código. `lib/admins.ts` solo decide qué pantalla ve la persona (UX, lee ese documento); la seguridad real la pone `isAdmin()` en `/firestore.rules`, con el mismo criterio.
+
+**Para agregar o quitar un admin:** Firebase Console → Firestore Database → Data → colección `admins` → crear o borrar un documento con el correo como ID (el contenido no importa, puede ir vacío). No hace falta tocar código ni hacer deploy. Nadie puede crear o borrar estos documentos desde el cliente (`allow write: if false` en las reglas) — es intencional, para que no haya forma de que alguien se autoasigne acceso.
 
 Detalle de las reglas:
 - Validación (fuente insuficiente, contradicción, sin confirmar, revisión de textos de IA): `docs/validacion.md`.

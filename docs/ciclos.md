@@ -348,3 +348,20 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Limitación conocida:** con las 12 noticias semilla casi cada tema tiene una sola noticia. Leerla sube *esa misma* noticia, que ya leíste, así que el efecto se demuestra poco. Para la demo hacen falta noticias reales adicionales concentradas en 2 o 3 temas (ya anotado en `docs/decisiones-pendientes.md`).
 
 **Pendiente:** probar en el preview de Vercel con una cuenta que lea 2 o 3 noticias de un mismo tema (más de 1 minuto cada una). Después de 5 minutos, o al recargar la app, el feed debe subirlas y mostrar "sigues el tema ...".
+
+## 2026-10-12 — Lista de admins pasa de código a datos en Firestore
+
+**Se esperaba:** agregar un tercer correo admin (rebe120104@gmail.com) de la misma forma de siempre: escribirlo en `firestore.rules` y `apps/admin/lib/admins.ts`.
+
+**Qué pasó:** la usuaria notó que esos correos (de sus compañeras de equipo) quedaban escritos en texto plano en dos archivos del repo, y que eso no debería estar "a la intemperie" por ser datos personales. Se decidió sacar la lista del código.
+
+**Qué se cambió:**
+- `isAdmin()` en `firestore.rules` ya no compara contra una lista escrita ahí — ahora comprueba si existe un documento `admins/{correo}` en Firestore (`exists()`).
+- Nueva regla para esa colección: cada quien solo puede leer **su propio** documento (`request.auth.token.email == email`), nunca la lista completa; y nadie puede crear ni borrar documentos desde el cliente (`allow write: if false`) — se administra a mano desde Firebase Console, para que no haya forma de autoasignarse acceso.
+- `apps/admin/lib/admins.ts`: `isAdminEmail()` (síncrono, lista en memoria) → `checkIsAdmin()` (async, lee Firestore).
+- `apps/admin/lib/auth.tsx`: el estado de "soy admin" ahora depende de una lectura async; se separó `authLoading` de `adminLoading` para que `<AdminGate>` no muestre "sin acceso" un instante antes de que la lectura termine.
+- Se desplegaron las reglas nuevas (`firebase deploy --only firestore:rules`) **antes** de este commit — hay una ventana en la que el código viejo (desplegado) convive con las reglas nuevas, documentado abajo.
+
+**Qué se cambió y por qué:** no es un requisito del enunciado, es una mejora de privacidad por iniciativa propia del equipo — evitar que datos personales (correos de compañeros) quedaran en un repo de GitHub sin necesidad, cuando hay una forma igual de simple de lograrlo con datos en vez de código. Beneficio extra: agregar o quitar un admin ya no necesita un commit ni un deploy, solo un documento en Firebase Console.
+
+**Pendiente:** crear a mano los 3 documentos en `admins` (Firebase Console → Firestore → Data) para los 3 correos actuales; subir este código (PR) para que el portal desplegado reconozca el nuevo flujo — hasta que eso pase, el correo nuevo (rebe120104@gmail.com) no puede entrar al portal aunque ya tenga su documento en Firestore, porque el código desplegado todavía usa la lista vieja en memoria.
