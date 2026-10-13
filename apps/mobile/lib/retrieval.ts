@@ -48,7 +48,7 @@ const STOPWORDS = new Set(
   sus tambien tan te tiene tienen toda todas todo todos tu tus un una unas uno unos y ya yo
   dime decime cuentame cuenta contame explica explicame explicar resume resumeme resumir resumen resumenes
   puedes podrias quiero quisiera saber sabe sabes paso pasa pasado pasando ocurrio ocurre sucedio sucede
-  hubo hace hizo dice dijo dicen va van sera seria puede pueden tienes estado vez veces
+  hubo hace hizo dice dijo dicen va van sera seria puede pueden tienes estado vez veces tal
   hablame habla informacion info noticia noticias nota notas novedad novedades dato datos tema temas
   hoy reciente recientes ultima ultimas ultimo ultimos ahora actual actuales nuevo nueva nuevos nuevas
   importante importantes principal principales relevante relevantes interesante
