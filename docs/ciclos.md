@@ -426,3 +426,19 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Limitación:** el endpoint no se probó contra el Firestore real. Se probará desde la pantalla del chat (paso 6) en el preview de Vercel.
 
 **Pendiente:** paso 6 (pantalla del chat); conectar el modelo cuando haya créditos, key y medidor de gasto.
+
+## 2026-10-13 — Chat, paso 6: pantalla del chat (Rol 2)
+
+**Se esperaba:** reemplazar el placeholder que dejó el Rol 1 dentro de `ChatDock.tsx` por el chat real, mostrando de forma visible lo que pide el enunciado: fuentes, qué está confirmado y qué no, y si la respuesta la generó una IA.
+
+**Qué pasó:**
+- `components/ChatPanel.tsx`: preguntas de ejemplo que se pueden tocar, mensajes, etiqueta "Respuesta generada por IA" (solo con `generatedBy: "model"`) o "Modo de prueba · sin IA", referencias `[n]` enlazadas a su cita, caja "Lo que no está confirmado" y citas con el mismo distintivo de validación que el feed (se reutilizó `ValidationBadge` y `SourceTypeBadge` del Rol 1).
+- `lib/chatClient.ts`: la llamada al endpoint nunca lanza un error. Sin red, un error 500 con HTML o una respuesta rara se convierten en un mensaje claro.
+- **Problema detectado al revisar el código:** si renovar el token fallaba (sin red), `send` habría lanzado un error y el chat se quedaba "buscando" para siempre. Se envolvió para terminar siempre con un mensaje.
+- **Conversación temporal:** la hoja de `ChatDock` se desmonta al cerrarla, así que con el estado normal de React la conversación se perdía al tocar una noticia citada. Se guarda en memoria del módulo: sobrevive a cerrar y abrir la hoja, pero se borra al recargar (sin historial entre sesiones).
+- Se borró `ChatPlaceholder.tsx`, que ya no se usa.
+- 5 pruebas nuevas (86 en total en `apps/mobile`), todas pasan. `tsc` pasa y `next build` compila.
+
+**Limitación:** la pantalla no se pudo ver funcionando en local (falta `.env.local` con Firebase en esta copia). Queda una lista de revisión en `docs/chat.md` (paso 6) para hacer en el preview de Vercel, con capturas como evidencia.
+
+**Pendiente:** revisión en el preview de Vercel; paso 7 (banco de preguntas de prueba); conectar el modelo cuando el equipo tenga créditos, key y medidor de gasto.

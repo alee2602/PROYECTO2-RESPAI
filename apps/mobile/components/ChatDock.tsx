@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
-import { ChatPlaceholder } from "@/components/ChatPlaceholder"
+import { ChatPanel } from "@/components/ChatPanel"
 
 // Contenedor del chat: hoja que sube desde abajo + burbuja flotante.
 // - Al abrir la app (en / o /feed) la hoja aparece desplegada: el chat sigue
@@ -10,7 +10,9 @@ import { ChatPlaceholder } from "@/components/ChatPlaceholder"
 // - Si se entra directo a una noticia (/noticia/..., p. ej. un link
 //   compartido), no se abre sola.
 // - Vive en el layout, así que abierto/cerrado se mantiene al navegar.
-// Rol 2: el contenido es <ChatPlaceholder />; reemplazarlo por el chat real.
+// El contenido es el chat real de Rol 2 (<ChatPanel />, ver docs/chat.md).
+// Al tocar una noticia citada, la hoja se cierra para mostrar el lector; la
+// conversación se conserva mientras la app esté abierta.
 
 const SHOW_ON = ["/feed", "/noticia/"]
 
@@ -67,7 +69,7 @@ export function ChatDock() {
                 </svg>
               </button>
             </header>
-            <ChatPlaceholder onGoToFeed={close} />
+            <ChatPanel onClose={close} />
           </section>
         </div>
       )}
