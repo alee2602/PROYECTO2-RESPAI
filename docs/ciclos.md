@@ -365,3 +365,17 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** no es un requisito del enunciado, es una mejora de privacidad por iniciativa propia del equipo — evitar que datos personales (correos de compañeros) quedaran en un repo de GitHub sin necesidad, cuando hay una forma igual de simple de lograrlo con datos en vez de código. Beneficio extra: agregar o quitar un admin ya no necesita un commit ni un deploy, solo un documento en Firebase Console.
 
 **Pendiente:** crear a mano los 3 documentos en `admins` (Firebase Console → Firestore → Data) para los 3 correos actuales; subir este código (PR) para que el portal desplegado reconozca el nuevo flujo — hasta que eso pase, el correo nuevo (rebe120104@gmail.com) no puede entrar al portal aunque ya tenga su documento en Firestore, porque el código desplegado todavía usa la lista vieja en memoria.
+
+## 2026-10-12 — Chat, paso 1: recuperación de noticias sin modelo (Rol 2)
+
+**Se esperaba:** empezar el chat por la parte que no depende de nadie (ni proveedor de modelo, ni API key, ni medidor de gasto): elegir qué noticias publicadas responden a una pregunta, sin llamar a un modelo, como pide CLAUDE.md (sección 4).
+
+**Qué pasó:**
+- Antes de diseñar se releyó el enunciado (`docs/Proyecto_2_AI_Assisted_News_App.pdf`): pide 4 tipos de consulta (reciente, región simulada, otro país, tema), y la recuperación se diseñó para cubrir esos 4.
+- `apps/mobile/lib/retrieval.ts` (puro, sin Firebase): normaliza la pregunta, detecta lugares (con alias como "Xela" y "EE.UU."), "mi región / mi país" según la ubicación simulada y si pide lo reciente; puntúa título, temas, resumen y cuerpo por raíz de 5 letras, y devuelve como máximo 5 noticias, cada una con su "por qué".
+- Al releer el código antes de probar se corrigieron 3 detalles: "Estados Unidos" sumaba doble (se detectaba por nombre y por alias), "IA" se descartaba por tener 2 letras, y verbos comunes como "pasa" o "hubo" quedaban como palabras a buscar.
+- 16 pruebas con las 12 noticias semilla reales (40 en total en `apps/mobile`), todas pasan, y `tsc` pasa.
+
+**Qué se cambió y por qué:** la decisión clave fue qué hacer cuando la pregunta pide algo que no está publicado. La salida fácil era devolver "lo más reciente" para que el modelo siempre tenga algo; se descartó porque empuja al modelo a responder con noticias que no tienen que ver. En su lugar, la recuperación devuelve 0 noticias más la lista de palabras no encontradas (`unmatchedTerms`). El paso 3 usará eso para decir "no puedo confirmarlo" **sin llamar al modelo**, que además es un ahorro de costo medible. Diseño completo en `docs/chat.md`.
+
+**Pendiente:** paso 2 (contrato de la respuesta) y paso 3 (respuestas sin modelo cuando no hay noticias).
