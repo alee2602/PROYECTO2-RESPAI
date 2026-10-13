@@ -25,8 +25,8 @@ pregunta ─► recuperación SIN modelo ─► ¿hay noticias?
 | Paso | Estado |
 |---|---|
 | 1. Recuperación sin modelo | **Hecho** (`apps/mobile/lib/retrieval.ts`) |
-| 2. Contrato de la respuesta (tipos) | Pendiente |
-| 3. Respuestas sin modelo (sin noticias, pregunta vacía) | Pendiente |
+| 2. Contrato de la respuesta (tipos) | **Hecho** (`apps/mobile/lib/chat.ts`) |
+| 3. Respuestas sin modelo (sin noticias, pregunta vacía) | **Hecho** (`answerWithoutModel` en `lib/chat.ts`) |
 | 4. Prompt del sistema y armado del contexto | Pendiente |
 | 5. Endpoint `app/api/chat/` (modo simulado, sin gastar) | Pendiente |
 | 6. Pantalla del chat | Pendiente |
@@ -79,3 +79,48 @@ Cubren las 4 consultas del enunciado con las 12 noticias semilla reales: lo reci
 
 - Busca palabras, no significados: "comicios" no encuentra "elecciones" y "carro" no encuentra "auto". Con pocas noticias es aceptable. Si en la demo falla una pregunta razonable, se agregan sinónimos a mano antes que usar un modelo.
 - La raíz de 5 letras puede juntar palabras distintas que empiezan igual ("nacional" y "naciones"). Por eso las palabras genéricas de lugar y alcance están en la lista de palabras vacías.
+
+## Paso 2 — Contrato de la respuesta
+
+Código: `apps/mobile/lib/chat.ts`. Lo usan el endpoint y la pantalla, para poder construirse por separado.
+
+**Pregunta** (`ChatRequest`): `{ question, location }`. La ubicación es la simulada, nunca GPS. `parseChatRequest` valida lo que llega al endpoint.
+
+**Respuesta** (`ChatResponse`), de dos tipos:
+
+| Tipo | Campos | Cuándo |
+|---|---|---|
+| `answer` | `text`, `citations[]`, `uncertainty`, `generatedBy` (`model` / `rules`) | Hay noticias que responden a la pregunta |
+| `no_answer` | `reason`, `text` | Pregunta vacía, muy larga, sin noticias, tope de gasto, sesión vencida o error |
+
+Cada **cita** lleva: id y título de la noticia, estado de validación (con la misma etiqueta en español que el feed), nota de validación, fuentes con su tipo y URL, y fecha de publicación.
+
+### Decisión de Responsible AI: las citas y la incertidumbre las arma el código
+
+El modelo **solo redacta el texto**. Las citas salen directo de las noticias recuperadas (`buildCitations`), y la nota de incertidumbre la arma el código (`uncertaintyNote`) a partir de los estados de validación y de las palabras no encontradas. Por eso:
+
+- El modelo no puede inventar una fuente: las citas no salen de su texto.
+- El modelo no puede "olvidarse" de avisar que algo está en desarrollo o no verificado: la nota se agrega siempre, diga lo que diga el texto.
+- `generatedBy` permite que la pantalla muestre "Respuesta generada por IA" solo cuando de verdad la redactó un modelo.
+
+Ejemplo de nota: *"En desarrollo (todavía sin confirmar del todo): «Bajan la proyección de crecimiento de Argentina». No encontré noticias publicadas sobre «terremoto», así que no puedo confirmar nada de eso."*
+
+### Decisión: cada pregunta es independiente
+
+No se manda el historial de la conversación al modelo. Es más barato (contexto corto) y el enunciado no exige memoria. **Limitación:** una repregunta como "¿y en México?" no tiene el contexto de la anterior. Hay que formular la pregunta completa.
+
+## Paso 3 — Respuestas sin modelo ($0)
+
+`answerWithoutModel(pregunta, recuperación)` responde **sin llamar al modelo** cuando no hace falta:
+
+| Caso | Motivo | Respuesta |
+|---|---|---|
+| Vacía, o solo un saludo ("hola", "¿qué tal?", "gracias") | `empty_question` | Explica qué puede responder y da 4 preguntas de ejemplo |
+| Más de 300 caracteres | `too_long` | Pide una pregunta más corta (protege el costo) |
+| Ninguna noticia publicada responde | `no_news` | *"No encontré noticias publicadas sobre «terremoto», «japon». No puedo confirmarlo: este chat solo responde con las noticias publicadas en la app, y una respuesta mía no es prueba de que algo sea cierto."* |
+
+Si devuelve `null`, hace falta el modelo para redactar. Los casos que decide el endpoint (`budget_exhausted`, `unauthenticated`, `error`) tienen textos fijos en `NO_ANSWER_TEXT`. El de tope de gasto invita a leer la portada: es un mensaje claro, no un error.
+
+**Ahorro para la sección de costos:** cada pregunta sin noticias, vacía o demasiado larga cuesta $0 en vez de una llamada al modelo. Cuando el endpoint registre las llamadas se podrá contar cuántas se ahorraron.
+
+Pruebas: `apps/mobile/lib/chat.test.ts` (12).
