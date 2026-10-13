@@ -409,3 +409,20 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** el costo por pregunta queda como fórmula (tokens × precio) hasta que el equipo elija el modelo con el Rol 5. Tabla de tamaños en `docs/chat.md`.
 
 **Pendiente:** elegir proveedor y modelo con el Rol 5; paso 5 (endpoint `app/api/chat/` en modo simulado).
+
+## 2026-10-13 — Chat, paso 5: endpoint `POST /api/chat` en modo de prueba (Rol 2)
+
+**Se esperaba:** tener el flujo completo del chat en el servidor sin depender de créditos ni de una API key, que todavía no existen. Se habló de usar la cuenta de Claude de la Rol 2 con Claude Haiku 5.5, pero no hay créditos y no será esa cuenta: la decisión de cuenta y modelo queda con el Rol 5.
+
+**Qué pasó:**
+- **Cómo lee el servidor las noticias.** La opción típica era una cuenta de servicio de Firebase (Admin SDK), que es otro secreto en Vercel. Se eligió la API REST de Firestore con el **token de sesión del propio usuario**: aplica las mismas reglas de seguridad, rechaza tokens falsos o vencidos, y no agrega secretos. El servidor lee las noticias en vez de recibirlas del celular, para que nadie pueda inyectar una noticia falsa que el chat cite como publicada.
+- **Mismas reglas que el feed.** El servidor no puede usar `lib/news.ts` (inicializa el SDK de cliente). En vez de duplicar las reglas de "qué noticia se puede mostrar", se movieron a `lib/newsParse.ts` (puro) y `lib/news.ts` (Rol 1) ahora las usa desde ahí, sin cambiar su comportamiento. Es un cambio en un archivo de otro rol: se avisa al Rol 1.
+- `lib/chatPipeline.ts`: el flujo de la pregunta a la respuesta, con el modelo como pieza enchufable. Sin modelo responde en "modo de prueba", lo dice en el texto y marca `generatedBy: "rules"` para que no aparezca como respuesta de IA.
+- Al escribir la prueba de citas inválidas se vio que quitar `[7]` dejaba "debate ." con un espacio suelto; se ajustó para quitar también el espacio previo.
+- 18 pruebas nuevas (81 en total en `apps/mobile`), todas pasan, con un "modelo falso" y un `fetch` simulado (sin red y sin gastar). `tsc` pasa y `next build` compila; el build local sigue fallando después, solo por la falta de `.env.local`.
+
+**Qué se cambió y por qué:** el registro por pregunta en los logs de Vercel guarda el camino, los tokens y el tiempo, pero **no el texto de la pregunta**, solo su largo, por privacidad.
+
+**Limitación:** el endpoint no se probó contra el Firestore real. Se probará desde la pantalla del chat (paso 6) en el preview de Vercel.
+
+**Pendiente:** paso 6 (pantalla del chat); conectar el modelo cuando haya créditos, key y medidor de gasto.

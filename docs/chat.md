@@ -28,7 +28,7 @@ pregunta ─► recuperación SIN modelo ─► ¿hay noticias?
 | 2. Contrato de la respuesta (tipos) | **Hecho** (`apps/mobile/lib/chat.ts`) |
 | 3. Respuestas sin modelo (sin noticias, pregunta vacía) | **Hecho** (`answerWithoutModel` en `lib/chat.ts`) |
 | 4. Prompt del sistema y armado del contexto | **Hecho** (`apps/mobile/lib/prompt.ts`) |
-| 5. Endpoint `app/api/chat/` (modo simulado, sin gastar) | Pendiente |
+| 5. Endpoint `app/api/chat/` (modo simulado, sin gastar) | **Hecho** (`apps/mobile/app/api/chat/route.ts`) — falta probarlo contra Firestore real desde la pantalla (paso 6) |
 | 6. Pantalla del chat | Pendiente |
 | 7. Banco de preguntas de prueba | Pendiente |
 | Conectar modelo real + medidor de gasto | Depende de Rol 5 (proveedor, API key, tope) |
@@ -168,3 +168,39 @@ Salida: máximo **350 tokens**.
 **Costo por pregunta** = `tokens de entrada × precio de entrada + tokens de salida × precio de salida`. Los precios dependen del modelo que elija el equipo con el Rol 5. Con estos tamaños, el costo por pregunta se calcula apenas se elija el modelo.
 
 Medidas de ahorro de este paso: solo 1 a 5 noticias por pregunta (no todas), recortes por noticia, sin historial y salida limitada.
+
+## Paso 5 — Endpoint `POST /api/chat` (modo de prueba)
+
+Código: `apps/mobile/app/api/chat/route.ts`, `lib/chatPipeline.ts` (flujo), `lib/firestoreRest.ts` (lectura en el servidor), `lib/newsParse.ts` (qué noticia se puede mostrar). Pruebas: `chatPipeline.test.ts` (7), `firestoreRest.test.ts` (7), `newsParse.test.ts` (4).
+
+**Pregunta:** `POST /api/chat` con el cuerpo `{ question, location }` y el header `Authorization: Bearer <ID token de Firebase del usuario>`.
+**Respuesta:** un `ChatResponse` (paso 2). Sin token o con un token vencido: `401` con `no_answer / unauthenticated`. Cuerpo mal formado: `400`. Error inesperado: `500` con un mensaje claro, nunca el detalle técnico.
+
+### Qué hace, en orden
+
+1. **Sin token, no responde.** Nadie de afuera de la app puede usar el chat ni gastar créditos.
+2. **Lee las noticias en el servidor, con el token del propio usuario,** por la API REST de Firestore. Es como mostrar el carnet del usuario en la puerta: aplican las mismas reglas de seguridad (`firestore.rules`), Firestore rechaza un token falso o vencido, y **no hace falta ninguna clave nueva** en Vercel.
+   - **Por qué el servidor y no el celular:** si el cliente mandara las noticias, alguien podría inyectar una noticia falsa y el chat la citaría como publicada.
+   - **Mismas reglas que el feed:** solo noticias publicadas, y sin estado de validación o sin fuentes no se usan. Para eso se extrajo la validación de `lib/news.ts` (Rol 1) a `lib/newsParse.ts`, sin cambiar su comportamiento; el feed y el lector usan la misma función.
+3. **Recupera, responde sin modelo cuando corresponde** (pasos 1 y 3), y si hace falta redactar, usa el modelo.
+4. **Quita del texto del modelo las citas a noticias que no existen** (`[7]` cuando hay 2). Las citas que ve la persona siempre son las de las noticias recuperadas.
+5. **Un registro por pregunta en los logs de Vercel:** qué camino tomó (`no_model`, `simulated` o `model`), el motivo, cuántas noticias, los tokens estimados y reales, y el tiempo. **No guarda el texto de la pregunta**, solo su largo, por privacidad. Sirve de evidencia para costos: cuántas preguntas se resolvieron con $0.
+
+### Modo de prueba (mientras no haya créditos ni API key)
+
+El modelo es una pieza enchufable (`Generate` en `chatPipeline.ts`). Hoy es `null`, así que el chat responde con los resúmenes de las noticias recuperadas, empezando con *"Modo de prueba (todavía sin IA): estas son las noticias publicadas que encontré."* y con `generatedBy: "rules"`, para que la pantalla **no** muestre "Respuesta generada por IA". Las citas y la nota de incertidumbre son las mismas que con modelo, porque las arma el código.
+
+**Para conectar el modelo** (cuando el equipo tenga créditos y key):
+1. Instalar el SDK oficial en `apps/mobile`.
+2. Crear la función `generate` con `process.env.ANTHROPIC_API_KEY`: solo en el servidor, nunca con `NEXT_PUBLIC_`.
+3. **Antes de cada llamada, revisar el tope de gasto** (medidor del Rol 5) y responder `budget_exhausted` si se alcanzó.
+4. Registrar el uso real de tokens que devuelve el proveedor (ya previsto en el registro).
+
+### Costo en Firestore
+
+Cada pregunta lee todas las noticias de `news` (hoy unas 12 a 13 lecturas). Con el plan Spark (50.000 lecturas al día) da para miles de preguntas diarias. Si la colección creciera mucho, se puede cachear la lista unos minutos en el servidor.
+
+### Limitaciones
+
+- Todavía no se probó contra el Firestore real: las pruebas usan un `fetch` simulado. La prueba real queda para el paso 6, desde la pantalla en el preview de Vercel.
+- No hay límite de preguntas por usuario. Con modo de prueba no importa (no gasta); antes de conectar el modelo conviene sumarlo al tope de gasto.
