@@ -29,7 +29,7 @@ pregunta ─► recuperación SIN modelo ─► ¿hay noticias?
 | 3. Respuestas sin modelo (sin noticias, pregunta vacía) | **Hecho** (`answerWithoutModel` en `lib/chat.ts`) |
 | 4. Prompt del sistema y armado del contexto | **Hecho** (`apps/mobile/lib/prompt.ts`) |
 | 5. Endpoint `app/api/chat/` (modo simulado, sin gastar) | **Hecho** (`apps/mobile/app/api/chat/route.ts`) — falta probarlo contra Firestore real desde la pantalla (paso 6) |
-| 6. Pantalla del chat | Pendiente |
+| 6. Pantalla del chat | **Hecho** (`apps/mobile/components/ChatPanel.tsx`) — falta revisarla en el preview de Vercel |
 | 7. Banco de preguntas de prueba | Pendiente |
 | Conectar modelo real + medidor de gasto | Depende de Rol 5 (proveedor, API key, tope) |
 
@@ -204,3 +204,41 @@ Cada pregunta lee todas las noticias de `news` (hoy unas 12 a 13 lecturas). Con 
 
 - Todavía no se probó contra el Firestore real: las pruebas usan un `fetch` simulado. La prueba real queda para el paso 6, desde la pantalla en el preview de Vercel.
 - No hay límite de preguntas por usuario. Con modo de prueba no importa (no gasta); antes de conectar el modelo conviene sumarlo al tope de gasto.
+
+## Paso 6 — Pantalla del chat
+
+Código: `apps/mobile/components/ChatPanel.tsx` (pantalla), `lib/chatClient.ts` (llamada al endpoint, pruebas en `chatClient.test.ts`), estilos en `app/globals.css` (sección "Chat real"). Va dentro de la hoja de `ChatDock.tsx` (Rol 1) y reemplazó al placeholder, que se borró.
+
+### Qué se ve
+
+- **Antes de preguntar:** la presentación y 4 preguntas de ejemplo que se pueden tocar.
+- **Cada respuesta:**
+  - **Quién la redactó:** "Respuesta generada por IA" (morado, el mismo color que "Imagen generada por IA") solo si la redactó un modelo. Si no, "Modo de prueba · sin IA".
+  - **El texto**, con los `[1]`, `[2]` resaltados y enlazados a su cita.
+  - **"Lo que no está confirmado"**: la nota que arma el servidor (en desarrollo, no verificada, palabras sin noticias), en el color de "en desarrollo".
+  - **Fuentes:** cada noticia citada con enlace al lector, el **mismo distintivo de validación que el feed**, la nota de validación si no está confirmada, y los medios con su tipo (Original / Resumen / Generado por IA) y su enlace externo.
+- **Sin respuesta** (sin noticias, saludo, tope de gasto, error): un mensaje claro. Con el tope de gasto, además, un enlace a la portada.
+- Aviso fijo sobre la caja de texto: *"Responde solo con noticias publicadas en la app. Revisa siempre las fuentes."*
+
+### Decisiones
+
+- **Conversación temporal:** vive en memoria mientras la app está abierta. Así se puede tocar una noticia citada (la hoja se cierra y abre el lector) y volver al chat sin perderla. Se borra al recargar o cerrar la app, o con "Borrar conversación". No hay historial entre sesiones, como pide el enunciado, y no se guarda nada en Firestore.
+- **Sesión vencida:** si el servidor responde `unauthenticated`, se renueva el token una vez y se reintenta.
+- **Nunca se queda "buscando":** sin red, error del servidor o respuesta rara se convierten en un mensaje claro (`chatClient.ts` nunca lanza un error).
+- Máximo 300 caracteres en la caja de texto, el mismo límite que el servidor.
+
+### Revisión pendiente en el preview de Vercel
+
+No se pudo abrir la app en local: esta copia no tiene `.env.local` con la configuración de Firebase. En el preview del PR, en un celular, revisar:
+
+1. Al abrir la app aparece el chat con las 4 preguntas de ejemplo; tocar una responde.
+2. "¿Qué pasó hoy?" → etiqueta "Modo de prueba · sin IA", noticias numeradas y fuentes abajo.
+3. "Explícame las elecciones en España" → cita de España con distintivo "Confirmada".
+4. Una pregunta sobre Argentina o el CAIMI → aparece "Lo que no está confirmado" y el distintivo "En desarrollo" o "No verificada".
+5. "¿Qué pasó con el terremoto en Japón?" → "No encontré noticias publicadas… No puedo confirmarlo".
+6. Tocar una noticia citada → se abre el lector; al reabrir la burbuja, la conversación sigue ahí.
+7. Cambiar la ubicación → "¿Qué hay en mi región?" responde distinto.
+8. En los logs de Vercel (Functions) aparece un registro `{"event":"chat", "path": ...}` por pregunta.
+9. Modo oscuro y zonas seguras del iPhone: la caja de texto no queda tapada por la barra inferior.
+
+Guardar capturas en `docs/evidencia/` (por ejemplo `chat-*.png`).
