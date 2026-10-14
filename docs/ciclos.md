@@ -442,3 +442,16 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Limitación:** la pantalla no se pudo ver funcionando en local (falta `.env.local` con Firebase en esta copia). Queda una lista de revisión en `docs/chat.md` (paso 6) para hacer en el preview de Vercel, con capturas como evidencia.
 
 **Pendiente:** revisión en el preview de Vercel; paso 7 (banco de preguntas de prueba); conectar el modelo cuando el equipo tenga créditos, key y medidor de gasto.
+
+## 2026-10-13 — Costos: diseño del medidor de gasto (Rol 5)
+
+**Se esperaba:** no construir un medidor propio y armar el tablero del portal con los datos reales de la API de uso y costos de Anthropic (`usage_report` / `cost_report`).
+
+**Qué pasó:**
+- Se eligió proveedor y modelo: Anthropic, cuenta de Rol 5 con USD 20, Claude Haiku 5.5 (USD 0,10 / 0,50 por millón de tokens de entrada / salida). Con los tamaños de prompt de Rol 2, una pregunta cuesta como máximo ~USD 0,000425.
+- La API de uso de Anthropic exige una Admin API key, que no existe para cuentas individuales y a la que no tenemos acceso. Además tiene ~5 minutos de retraso (no sirve para un tope) y no informa el saldo.
+- Con ese costo por pregunta, el riesgo real no es que la demo agote el crédito sino el abuso (bucles, scripts, muchas cuentas).
+
+**Qué se cambió y por qué:** el medidor es propio: el endpoint suma tokens reales y costo en Firestore con incrementos atómicos, y aplica tope total, límites por usuario y freno por hora. Para escribir esos contadores hace falta una cuenta de servicio de Firebase (si el usuario pudiera escribirlos con su token, podría borrar su límite). Reserva para la demo: USD 10 (se descartó USD 5 por quedarse corto). Saldo = USD 20 − gasto medido; se verifica contra la página Usage de la Consola en cada ensayo. Diseño completo en `docs/costos.md`.
+
+**Pendiente:** valores de los límites (pregunta abierta); revisión de las reglas con Rol 4; implementación en el orden de `docs/costos.md`.
