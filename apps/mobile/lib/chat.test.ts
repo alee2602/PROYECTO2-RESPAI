@@ -5,6 +5,7 @@ import type { UserLocation } from "./locations.ts"
 import { retrieveNews } from "./retrieval.ts"
 import {
   CHAT_LIMITS,
+  NO_ANSWER_TEXT,
   answerWithoutModel,
   buildCitations,
   parseChatRequest,
@@ -139,4 +140,12 @@ test("algo no publicado en un país que sí existe: va al modelo, pero con la no
   const r = ask(q)
   assert.equal(answerWithoutModel(q, r), null)
   assert.deepEqual(r.unmatchedTerms, ["terremoto"])
+})
+
+test("motivos del medidor (Rol 5): cada uno tiene un texto claro, sin detalles técnicos", () => {
+  for (const reason of ["rate_limited", "chat_disabled", "off_topic", "budget_exhausted"] as const) {
+    const text = NO_ANSWER_TEXT[reason]
+    assert.ok(text.length > 20, reason)
+    assert.doesNotMatch(text, /error|token|firestore|api|429|500/i, reason)
+  }
 })

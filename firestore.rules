@@ -44,6 +44,36 @@ service cloud.firestore {
       }
     }
 
+    // Medidor de gasto del chat (Rol 5, docs/medidor-gasto.md). Lo escribe
+    // solo el servidor con el Admin SDK, que no pasa por estas reglas. Desde
+    // el cliente: solo admins leen (tablero del portal).
+    match /usage/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /rate_limits/{userId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Interruptor y reserva del chat: los cambia un admin desde el tablero
+    // /costos. El endpoint solo lo apaga (Admin SDK, no pasa por acá).
+    // Se valida el formato para que un error del portal no deje un documento
+    // que confunda al endpoint. Contrato: docs/medidor-gasto.md.
+    match /config/chat {
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(["enabled", "reserveUsd", "disabledBy", "updatedAt"])
+        && (!("enabled" in request.resource.data) || request.resource.data.enabled is bool)
+        && (!("reserveUsd" in request.resource.data)
+            || (request.resource.data.reserveUsd is number
+                && request.resource.data.reserveUsd >= 0
+                && request.resource.data.reserveUsd <= 20))
+        && (!("disabledBy" in request.resource.data)
+            || request.resource.data.disabledBy == null
+            || request.resource.data.disabledBy in ["admin", "reserve"]);
+    }
+
     // Todo lo demás, cerrado por defecto.
     match /{document=**} {
       allow read, write: if false;

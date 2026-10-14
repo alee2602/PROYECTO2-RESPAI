@@ -12,6 +12,10 @@ export function AdminHeader() {
       <Link href="/" className="wordmark">
         Resp<span>AI</span> Portal
       </Link>
+      <nav className="admin-nav" aria-label="Secciones">
+        <Link href="/">Noticias</Link>
+        <Link href="/costos">Costos</Link>
+      </nav>
       <div className="admin-header-user">
         <span className="muted small">{user.email}</span>
         <button className="btn btn-sm" onClick={logOut}>

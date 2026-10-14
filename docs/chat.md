@@ -31,7 +31,7 @@ pregunta ─► recuperación SIN modelo ─► ¿hay noticias?
 | 5. Endpoint `app/api/chat/` (modo simulado, sin gastar) | **Hecho** (`apps/mobile/app/api/chat/route.ts`) — falta probarlo contra Firestore real desde la pantalla (paso 6) |
 | 6. Pantalla del chat | **Hecho** (`apps/mobile/components/ChatPanel.tsx`) — falta revisarla en el preview de Vercel |
 | 7. Banco de preguntas de prueba | Pendiente |
-| Conectar modelo real + medidor de gasto | Depende de Rol 5 (proveedor, API key, tope) |
+| Conectar modelo real + medidor de gasto | **Hecho en código (Rol 5)**; falta probar en vivo (Tarea 10 del plan). Ver [`docs/medidor-gasto.md`](medidor-gasto.md) |
 
 ## Paso 1 — Recuperación sin modelo
 

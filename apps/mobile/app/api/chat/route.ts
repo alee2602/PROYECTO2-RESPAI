@@ -1,24 +1,28 @@
 import { NO_ANSWER_TEXT, parseChatRequest, type ChatNoAnswer } from "@/lib/chat"
-import { answerQuestion, type Generate } from "@/lib/chatPipeline"
+import { answerQuestion } from "@/lib/chatPipeline"
 import { UnauthenticatedError, fetchPublishedNewsRest } from "@/lib/firestoreRest"
+import { anthropicGenerate, parseThinkingMode } from "@/lib/anthropic"
+import { meteredAnswer } from "@/lib/meteredChat"
+import { getAdminApp, verifyUid } from "@/lib/serverAuth"
+import { safeError } from "@/lib/safeLog"
+import { FirestoreUsageStore } from "@/lib/usageStoreFirestore"
 
 // ---------------------------------------------------------------------------
-// POST /api/chat — endpoint del chat (Rol 2). Corre en el servidor (Vercel).
+// POST /api/chat — endpoint del chat (Rol 2, medidor de gasto: Rol 5). Corre
+// en el servidor (Vercel).
 //
 // Recibe: { question, location } + header `Authorization: Bearer <ID token de Firebase>`.
-// Devuelve: ChatResponse (lib/chat.ts). Diseño completo: docs/chat.md.
+// Devuelve: ChatResponse (lib/chat.ts). Diseño: docs/chat.md y docs/medidor-gasto.md.
 //
 // 1. Sin token → no responde (nadie de afuera puede usar el chat ni gastar).
 // 2. Lee las noticias publicadas en el SERVIDOR, con el token del usuario
 //    (lib/firestoreRest.ts): el cliente no puede inyectar noticias.
-// 3. Recupera sin modelo, responde sin modelo cuando no hace falta, y si hace
-//    falta redactar, usa el modelo (lib/chatPipeline.ts).
-//
-// MODELO: todavía no conectado (sin créditos ni API key). `generate` es null y
-// el chat responde en "modo de prueba", diciéndolo claramente. Para conectarlo:
-// crear la función con el SDK oficial usando process.env.ANTHROPIC_API_KEY
-// (solo servidor, nunca NEXT_PUBLIC_) y, ANTES de llamarla, revisar el tope de
-// gasto (medidor del Rol 5): si se alcanzó, responder "budget_exhausted".
+// 3. Con FIREBASE_SERVICE_ACCOUNT: verifica el token con el Admin SDK y pasa
+//    por el medidor (lib/meteredChat.ts): interruptor, reserva (que apaga el
+//    chat sola, lib/globalLimit.ts) y límite por usuario. El modelo
+//    (Haiku 5.5, lib/anthropic.ts) solo se llama si todo eso lo permite.
+//    Sin esa variable NO hay medidor, así que nunca se llama al modelo
+//    (modo de prueba, como antes).
 // ---------------------------------------------------------------------------
 
 function noAnswer(status: number, reason: "unauthenticated" | "error"): Response {
@@ -48,24 +52,39 @@ export async function POST(request: Request): Promise<Response> {
     return noAnswer(500, "error")
   }
 
+  const today = new Date().toISOString().slice(0, 10)
+  const loadNews = async () => (await fetchPublishedNewsRest(projectId, idToken)).items
+  // Un registro por pregunta en los logs de Vercel. Sin el texto de la
+  // pregunta, por privacidad: solo su largo.
+  const log = (trace: object) =>
+    console.log(JSON.stringify({ event: "chat", ...trace, questionChars: req.question.length, ms: Date.now() - started }))
+
   try {
-    const { items } = await fetchPublishedNewsRest(projectId, idToken)
+    const app = getAdminApp()
+    if (!app) {
+      console.warn("[chat] Sin FIREBASE_SERVICE_ACCOUNT: medidor apagado, modo de prueba (no se llama al modelo)")
+      const { response, trace } = await answerQuestion(req, await loadNews(), today, null)
+      log(trace)
+      return Response.json(response)
+    }
 
-    const generate: Generate | null = null // ver comentario de arriba: se conecta con el modelo elegido
+    const uid = await verifyUid(app, idToken)
+    if (!uid) return noAnswer(401, "unauthenticated")
 
-    const today = new Date().toISOString().slice(0, 10)
-    const { response, trace } = await answerQuestion(req, items, today, generate)
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    const generate = apiKey ? anthropicGenerate(apiKey, parseThinkingMode(process.env.CHAT_THINKING)) : null
 
-    // Un registro por pregunta en los logs de Vercel (evidencia de costos y de
-    // cuántas preguntas se resolvieron sin modelo). Sin el texto de la
-    // pregunta, por privacidad: solo su largo.
-    console.log(
-      JSON.stringify({ event: "chat", ...trace, questionChars: req.question.length, ms: Date.now() - started })
-    )
+    const { response, trace } = await meteredAnswer(uid, req, loadNews, {
+      store: new FirestoreUsageStore(app),
+      generate,
+      now: new Date(),
+      today,
+    })
+    log(trace)
     return Response.json(response)
   } catch (e) {
     if (e instanceof UnauthenticatedError) return noAnswer(401, "unauthenticated")
-    console.error("[chat] Error inesperado", e)
+    console.error("[chat] Error inesperado", safeError(e))
     return noAnswer(500, "error")
   }
 }
