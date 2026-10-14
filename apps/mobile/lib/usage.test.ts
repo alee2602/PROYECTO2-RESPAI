@@ -2,25 +2,26 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { WORST_CASE_COST_USD, costUsd } from "./pricing.ts"
 import {
+  BUDGET_USD,
   DEFAULT_CONFIG,
-  DEFAULT_LIMITS,
+  DEFAULT_RESERVE_USD,
   PaidModelError,
+  USAGE_PATHS,
+  USER_LIMITS,
   addCounters,
   countersDelta,
   dayKey,
-  decideBudget,
   decideRateLimit,
+  decideReserve,
   emptyCounters,
   hourKey,
   incrementFields,
   minuteKey,
-  parseBudgetEnv,
   parseChatConfig,
   parseRateLimitState,
 } from "./usage.ts"
 
-const LIMITS = { perMinute: 2, perDay: 3, hourlyUsd: 1 }
-const BUDGET = { budgetUsd: 20, reserveUsd: 10 }
+const LIMITS = { perMinute: 2, perDay: 3 }
 
 // --- Claves de tiempo (UTC) ------------------------------------------------
 
@@ -32,6 +33,10 @@ test("claves de día, hora y minuto en UTC", () => {
 })
 
 // --- Contadores ------------------------------------------------------------
+
+test("caminos: sin budget_blocked (la reserva cuenta como disabled)", () => {
+  assert.deepEqual([...USAGE_PATHS], ["model", "no_model", "off_topic", "rate_limited", "disabled", "simulated", "error"])
+})
 
 test("llamada al modelo: suma tokens, costo y una pregunta en 'model'", () => {
   const usage = { inputTokens: 900, outputTokens: 80 }
@@ -66,11 +71,19 @@ test("incrementFields: solo incluye los caminos con pregunta, con la función da
   assert.deepEqual(f.questions, { model: { inc: 1 } })
 })
 
-// --- Config del chat ---------------------------------------------------------
+// --- Presupuesto, límites y config/chat --------------------------------------
 
-test("config: sin documento → encendido con límites por defecto", () => {
+test("presupuesto fijo USD 20, reserva por defecto USD 10, límites provisionales 5/min y 20/día", () => {
+  assert.equal(BUDGET_USD, 20)
+  assert.equal(DEFAULT_RESERVE_USD, 10)
+  assert.deepEqual(USER_LIMITS, { perMinute: 5, perDay: 20 })
+})
+
+test("config: sin documento → encendido, reserva 10, sin quién lo apagó", () => {
+  assert.deepEqual(DEFAULT_CONFIG, { enabled: true, reserveUsd: 10, disabledBy: null })
   assert.deepEqual(parseChatConfig(null), DEFAULT_CONFIG)
   assert.deepEqual(parseChatConfig(undefined), DEFAULT_CONFIG)
+  assert.deepEqual(parseChatConfig("basura"), DEFAULT_CONFIG)
 })
 
 test("config: solo un false explícito apaga el chat", () => {
@@ -79,45 +92,49 @@ test("config: solo un false explícito apaga el chat", () => {
   assert.equal(parseChatConfig({ enabled: "false" }).enabled, true)
 })
 
-test("config: límites inválidos caen al valor por defecto, los válidos se respetan", () => {
-  const c = parseChatConfig({ limits: { perMinute: 0, perDay: -1, hourlyUsd: 0.5 } })
-  assert.equal(c.limits.perMinute, DEFAULT_LIMITS.perMinute)
-  assert.equal(c.limits.perDay, DEFAULT_LIMITS.perDay)
-  assert.equal(c.limits.hourlyUsd, 0.5)
+test("config: reserva válida entre 0 y 20; si no, 10", () => {
+  assert.equal(parseChatConfig({ reserveUsd: 0 }).reserveUsd, 0)
+  assert.equal(parseChatConfig({ reserveUsd: 20 }).reserveUsd, 20)
+  assert.equal(parseChatConfig({ reserveUsd: 19.9999 }).reserveUsd, 19.9999)
+  assert.equal(parseChatConfig({ reserveUsd: -1 }).reserveUsd, 10)
+  assert.equal(parseChatConfig({ reserveUsd: 21 }).reserveUsd, 10)
+  assert.equal(parseChatConfig({ reserveUsd: Number.NaN }).reserveUsd, 10)
+  assert.equal(parseChatConfig({ reserveUsd: "5" }).reserveUsd, 10)
 })
 
-// --- Presupuesto (Review Focus 5) --------------------------------------------
-
-test("presupuesto: valores válidos", () => {
-  assert.deepEqual(parseBudgetEnv({ BUDGET_USD: "20", RESERVE_USD: "10" }), BUDGET)
+test("config: disabledBy solo 'admin' o 'reserve'; lo demás es null", () => {
+  assert.equal(parseChatConfig({ enabled: false, disabledBy: "reserve" }).disabledBy, "reserve")
+  assert.equal(parseChatConfig({ enabled: false, disabledBy: "admin" }).disabledBy, "admin")
+  assert.equal(parseChatConfig({ enabled: false, disabledBy: "otro" }).disabledBy, null)
 })
 
-test("presupuesto mal configurado → null (no se llama al modelo)", () => {
-  assert.equal(parseBudgetEnv({}), null)
-  assert.equal(parseBudgetEnv({ BUDGET_USD: "20" }), null)
-  assert.equal(parseBudgetEnv({ BUDGET_USD: "veinte", RESERVE_USD: "10" }), null)
-  assert.equal(parseBudgetEnv({ BUDGET_USD: "20", RESERVE_USD: "20" }), null)
-  assert.equal(parseBudgetEnv({ BUDGET_USD: "20", RESERVE_USD: "-1" }), null)
-  assert.equal(parseBudgetEnv({ BUDGET_USD: "", RESERVE_USD: "" }), null)
+test("config vieja con limits/hourlyUsd: se ignoran sin romper nada", () => {
+  const c = parseChatConfig({ enabled: true, limits: { perMinute: 2, hourlyUsd: 1 } })
+  assert.deepEqual(c, DEFAULT_CONFIG)
 })
 
-test("tope total: bloquea si gasto + peor caso supera USD 10", () => {
-  const hourUsd = 0
-  assert.deepEqual(decideBudget({ totalUsd: 10 - WORST_CASE_COST_USD / 2, hourUsd }, BUDGET, LIMITS), {
-    allowed: false,
-    why: "total",
-  })
-  assert.deepEqual(decideBudget({ totalUsd: 10 - 2 * WORST_CASE_COST_USD, hourUsd }, BUDGET, LIMITS), {
-    allowed: true,
-  })
+// --- Regla de la reserva -----------------------------------------------------
+
+test("reserva: con margen para una llamada más, se permite", () => {
+  assert.equal(decideReserve(10 - 2 * WORST_CASE_COST_USD, 10), true)
 })
 
-test("freno por hora: bloquea si el gasto de la hora + peor caso supera el límite", () => {
-  assert.deepEqual(decideBudget({ totalUsd: 0, hourUsd: 1 }, BUDGET, LIMITS), { allowed: false, why: "hourly" })
-  assert.deepEqual(decideBudget({ totalUsd: 0, hourUsd: 0.5 }, BUDGET, LIMITS), { allowed: true })
+test("reserva: si el peor caso la cruzaría, no se permite", () => {
+  assert.equal(decideReserve(10 - WORST_CASE_COST_USD / 2, 10), false)
 })
 
-// --- Límite por usuario (Review Focus 2) -------------------------------------
+test("reserva 0 (levantada en la demo): se puede gastar casi todo", () => {
+  assert.equal(decideReserve(0, 0), true)
+  assert.equal(decideReserve(19.99, 0), true)
+  assert.equal(decideReserve(20, 0), false)
+})
+
+test("reserva 20 o 19,9999 (prueba en vivo): nunca se permite", () => {
+  assert.equal(decideReserve(0, 20), false)
+  assert.equal(decideReserve(0, 19.9999), false)
+})
+
+// --- Límite por usuario -------------------------------------------------------
 
 const at = (iso: string) => new Date(iso)
 

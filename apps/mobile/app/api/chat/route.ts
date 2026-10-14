@@ -5,7 +5,6 @@ import { anthropicGenerate, parseThinkingMode } from "@/lib/anthropic"
 import { meteredAnswer } from "@/lib/meteredChat"
 import { getAdminApp, verifyUid } from "@/lib/serverAuth"
 import { safeError } from "@/lib/safeLog"
-import { parseBudgetEnv } from "@/lib/usage"
 import { FirestoreUsageStore } from "@/lib/usageStoreFirestore"
 
 // ---------------------------------------------------------------------------
@@ -19,8 +18,8 @@ import { FirestoreUsageStore } from "@/lib/usageStoreFirestore"
 // 2. Lee las noticias publicadas en el SERVIDOR, con el token del usuario
 //    (lib/firestoreRest.ts): el cliente no puede inyectar noticias.
 // 3. Con FIREBASE_SERVICE_ACCOUNT: verifica el token con el Admin SDK y pasa
-//    por el medidor (lib/meteredChat.ts): interruptor, límite por usuario,
-//    tope total con reserva para la demo y freno por hora. El modelo
+//    por el medidor (lib/meteredChat.ts): interruptor, reserva (que apaga el
+//    chat sola, lib/globalLimit.ts) y límite por usuario. El modelo
 //    (Haiku 5.5, lib/anthropic.ts) solo se llama si todo eso lo permite.
 //    Sin esa variable NO hay medidor, así que nunca se llama al modelo
 //    (modo de prueba, como antes).
@@ -72,15 +71,12 @@ export async function POST(request: Request): Promise<Response> {
     const uid = await verifyUid(app, idToken)
     if (!uid) return noAnswer(401, "unauthenticated")
 
-    const budget = parseBudgetEnv(process.env)
-    if (!budget) console.error("[chat] BUDGET_USD / RESERVE_USD faltan o son inválidos: no se llama al modelo")
     const apiKey = process.env.ANTHROPIC_API_KEY
     const generate = apiKey ? anthropicGenerate(apiKey, parseThinkingMode(process.env.CHAT_THINKING)) : null
 
     const { response, trace } = await meteredAnswer(uid, req, loadNews, {
       store: new FirestoreUsageStore(app),
       generate,
-      budget,
       now: new Date(),
       today,
     })

@@ -4,19 +4,15 @@ import { WORST_CASE_COST_USD, costUsd } from "./pricing.ts"
 // ---------------------------------------------------------------------------
 // Medidor de gasto (Rol 5): tipos y decisiones PURAS (sin Firestore, sin red).
 // Diseño: docs/medidor-gasto.md. Todas las claves de tiempo van en UTC.
+//
+// Lo ÚNICO que frena el modelo (decisión 2026-10-13): los límites por
+// usuario, el interruptor y la reserva (que apaga el interruptor sola).
+// El presupuesto de USD 20 es fijo e informativo.
 // ---------------------------------------------------------------------------
 
-// Qué camino tomó una pregunta. Solo "model" cuesta dinero.
-export const USAGE_PATHS = [
-  "model",
-  "no_model",
-  "off_topic",
-  "rate_limited",
-  "budget_blocked",
-  "disabled",
-  "simulated",
-  "error",
-] as const
+// Qué camino tomó una pregunta. Solo "model" cuesta dinero. Una pregunta
+// frenada por el interruptor o por la reserva cuenta como "disabled".
+export const USAGE_PATHS = ["model", "no_model", "off_topic", "rate_limited", "disabled", "simulated", "error"] as const
 export type UsagePath = (typeof USAGE_PATHS)[number]
 
 export type UsageCounters = {
@@ -75,71 +71,57 @@ export const dayKey = (d: Date) => d.toISOString().slice(0, 10) // YYYY-MM-DD
 export const hourKey = (d: Date) => d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
 export const minuteKey = (d: Date) => d.toISOString().slice(0, 16) // YYYY-MM-DDTHH:MM
 
-// --- Config del chat (documento config/chat) --------------------------------
+// --- Presupuesto y reserva ---------------------------------------------------
 
-export type ChatLimits = {
+// Fijos para este proyecto. El portal tiene una copia (apps/admin/lib/costs.ts):
+// si cambian acá, cambiar allá. Contrato en docs/medidor-gasto.md.
+export const BUDGET_USD = 20
+export const DEFAULT_RESERVE_USD = 10
+
+// --- Límites por usuario (documento rate_limits/{uid}) ------------------------
+
+export type UserLimits = {
   perMinute: number // preguntas por usuario por minuto (ráfaga)
   perDay: number // preguntas por usuario por día
-  hourlyUsd: number // freno global: gasto máximo por hora
 }
 
-// PROVISIONALES: los valores son pregunta abierta (docs/costos.md). Se pueden
-// cambiar sin desplegar desde config/chat.limits.
-export const DEFAULT_LIMITS: ChatLimits = { perMinute: 5, perDay: 20, hourlyUsd: 1 }
+// PROVISIONALES: los valores son pregunta abierta (docs/costos.md).
+export const USER_LIMITS: UserLimits = { perMinute: 5, perDay: 20 }
 
-export type ChatConfig = { enabled: boolean; limits: ChatLimits }
+// --- config/chat (contrato con el portal) -------------------------------------
 
-export const DEFAULT_CONFIG: ChatConfig = { enabled: true, limits: DEFAULT_LIMITS }
+export type DisabledBy = "admin" | "reserve"
 
-const isPositive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0
+export type ChatConfig = {
+  enabled: boolean // interruptor
+  reserveUsd: number // 0–20, editable en el tablero
+  disabledBy: DisabledBy | null // quién lo apagó la última vez
+}
 
-// Sin documento, el chat está encendido con los límites por defecto. Solo un
-// `enabled: false` explícito lo apaga; un límite inválido usa el de defecto.
+export const DEFAULT_CONFIG: ChatConfig = { enabled: true, reserveUsd: DEFAULT_RESERVE_USD, disabledBy: null }
+
+// Sin documento: encendido, reserva 10. Solo un `enabled: false` explícito
+// apaga; una reserva inválida vale 10; campos de más (p. ej. el viejo
+// `limits`) se ignoran.
 export function parseChatConfig(raw: unknown): ChatConfig {
   if (!raw || typeof raw !== "object") return DEFAULT_CONFIG
-  const r = raw as { enabled?: unknown; limits?: unknown }
-  const l = (r.limits && typeof r.limits === "object" ? r.limits : {}) as Record<string, unknown>
+  const r = raw as Record<string, unknown>
+  const reserve = r.reserveUsd
+  const validReserve = typeof reserve === "number" && Number.isFinite(reserve) && reserve >= 0 && reserve <= BUDGET_USD
   return {
     enabled: r.enabled !== false,
-    limits: {
-      perMinute: isPositive(l.perMinute) ? l.perMinute : DEFAULT_LIMITS.perMinute,
-      perDay: isPositive(l.perDay) ? l.perDay : DEFAULT_LIMITS.perDay,
-      hourlyUsd: isPositive(l.hourlyUsd) ? l.hourlyUsd : DEFAULT_LIMITS.hourlyUsd,
-    },
+    reserveUsd: validReserve ? reserve : DEFAULT_RESERVE_USD,
+    disabledBy: r.disabledBy === "admin" || r.disabledBy === "reserve" ? r.disabledBy : null,
   }
 }
 
-// --- Presupuesto y tope -------------------------------------------------------
-
-export type BudgetSettings = { budgetUsd: number; reserveUsd: number }
-
-// De las variables de entorno BUDGET_USD y RESERVE_USD. Si algo está mal,
-// devuelve null y el endpoint NO llama al modelo (falla cerrada).
-export function parseBudgetEnv(env: Record<string, string | undefined>): BudgetSettings | null {
-  if (!env.BUDGET_USD || !env.RESERVE_USD) return null
-  const budgetUsd = Number(env.BUDGET_USD)
-  const reserveUsd = Number(env.RESERVE_USD)
-  if (!Number.isFinite(budgetUsd) || !Number.isFinite(reserveUsd)) return null
-  if (budgetUsd <= 0 || reserveUsd < 0 || reserveUsd >= budgetUsd) return null
-  return { budgetUsd, reserveUsd }
+// ¿Se puede hacer una llamada más sin que el saldo baje de la reserva?
+// Se compara con el PEOR caso de una llamada (lib/pricing.ts).
+export function decideReserve(spentUsd: number, reserveUsd: number): boolean {
+  return BUDGET_USD - spentUsd - WORST_CASE_COST_USD >= reserveUsd
 }
 
-// Lo que se puede gastar antes de tocar la reserva de la demo.
-export const capUsd = (b: BudgetSettings) => b.budgetUsd - b.reserveUsd
-
-export type Spend = { totalUsd: number; hourUsd: number }
-
-export type BudgetDecision = { allowed: true } | { allowed: false; why: "total" | "hourly" }
-
-// Se compara con el PEOR caso de una llamada: aunque la llamada salga lo más
-// cara posible, no se pasa del tope.
-export function decideBudget(spend: Spend, budget: BudgetSettings, limits: ChatLimits): BudgetDecision {
-  if (spend.totalUsd + WORST_CASE_COST_USD > capUsd(budget)) return { allowed: false, why: "total" }
-  if (spend.hourUsd + WORST_CASE_COST_USD > limits.hourlyUsd) return { allowed: false, why: "hourly" }
-  return { allowed: true }
-}
-
-// --- Límite por usuario (documento rate_limits/{uid}) ------------------------
+// --- Límite por usuario --------------------------------------------------------
 
 export type RateLimitState = { minute: string; minuteCount: number; day: string; dayCount: number }
 
@@ -156,7 +138,7 @@ export function parseRateLimitState(raw: unknown): RateLimitState | null {
 export function decideRateLimit(
   prev: RateLimitState | null,
   now: Date,
-  limits: ChatLimits
+  limits: UserLimits
 ): { allowed: boolean; next: RateLimitState } {
   const minute = minuteKey(now)
   const day = dayKey(now)

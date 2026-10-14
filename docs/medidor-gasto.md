@@ -1,6 +1,6 @@
 # Medidor de gasto: diseño técnico (Rol 5)
 
-Última actualización: 2026-10-13. Estado: **diseño, sin implementar**. Decisiones y números en `docs/costos.md`; técnicas de ahorro en `docs/reduccion-costos.md`.
+Última actualización: 2026-10-13. Estado: **implementado en código** (rama `rol5/medidor`), falta la prueba en vivo. Decisiones y números en `docs/costos.md`; técnicas de ahorro en `docs/reduccion-costos.md`.
 
 ## Resumen
 
@@ -18,12 +18,11 @@ Se mantiene el mismo método, la misma ruta, el mismo cuerpo `{ question, locati
 |---|---|---|---|
 | 1 | Verificar el ID token (Admin SDK, `verifyIdToken`) | `401 unauthenticated` | 0 |
 | 2 | Validar el cuerpo (`parseChatRequest`, ya existe) | `400 error` | 0 |
-| 3 | Leer `config/chat`: ¿chat encendido? | `chat_disabled` | 0 |
+| 3 | Límite global (`lib/globalLimit.ts`): ¿interruptor encendido? ¿el peor caso cruzaría la reserva? Si cruza, apaga el interruptor (idempotente) | `chat_disabled` / `budget_exhausted` | 0 |
 | 4 | Límite del usuario (transacción sobre `rate_limits/{uid}`) | `rate_limited` | 0 |
 | 5 | Leer noticias publicadas (consulta acotada + caché de 60 s) | `500 error` | 0 USD, lecturas de Firestore |
 | 6 | Recuperación y respuestas sin modelo (ya existen) | `empty_question` / `too_long` / `no_news` | 0 |
 | 7 | Filtro de pedidos fuera de tema | `off_topic` | 0 |
-| 8 | Tope total y freno por hora (leer totales) | `budget_exhausted` | 0 |
 | 9 | Llamar a Haiku 5.5 | `500 error` | El de la llamada |
 | 10 | Registrar el uso: incrementos en los totales | Se registra en el log, la respuesta sale igual | 0 |
 
@@ -49,7 +48,7 @@ Regla: el medidor guarda **cuánto** se usa el chat, nunca **qué** se habla en 
 
 | Dónde | Qué | Para qué |
 |---|---|---|
-| `usage/totals`, `usage/totals/days/{día}`, `usage/totals/hours/{hora}` | `spentUsd`, `inputTokens`, `outputTokens`, `questions.{camino}` (contadores) y `updatedAt` | Tope total, freno por hora y tablero de costos. Son sumas globales: no dicen quién preguntó |
+| `usage/totals`, `usage/totals/days/{día}`, `usage/totals/hours/{hora}` | `spentUsd`, `inputTokens`, `outputTokens`, `questions.{camino}` (contadores) y `updatedAt` | Regla de la reserva y tablero de costos. Son sumas globales: no dicen quién preguntó |
 | `rate_limits/{uid}` | `minute`, `minuteCount`, `day`, `dayCount`, `updatedAt` | Límite por usuario. El `uid` es solo el nombre del documento: sin él no se puede limitar a cada persona |
 | `config/chat` | `enabled`, `limits` | Interruptor y límites; lo escribe un admin desde el portal |
 | Logs de Vercel (una línea por pregunta, `route.ts`) | Camino (`path`), motivo (`reason`), cantidad de noticias citadas, tokens, costo, **largo** de la pregunta (`questionChars`) y duración (`ms`) | Evidencia de costos y depuración |
@@ -76,7 +75,7 @@ Todas las fechas se guardan en **UTC**. Las claves de día y de hora también va
 ```
 usage/totals                          ← acumulado desde el inicio
 usage/totals/days/{YYYY-MM-DD}        ← por día (UTC)
-usage/totals/hours/{YYYY-MM-DDTHH}    ← por hora (UTC), lo usa el freno por hora
+usage/totals/hours/{YYYY-MM-DDTHH}    ← por hora (UTC), lo muestra el tablero
 ```
 
 Los tres tipos de documento tienen la misma forma:
@@ -91,8 +90,7 @@ type UsageCounters = {
     no_model: number        // vacía, saludo, muy larga o sin noticias
     off_topic: number
     rate_limited: number
-    budget_blocked: number
-    disabled: number
+    disabled: number        // apagado por un admin o por la reserva
     simulated: number       // sin API key: modo de prueba
     error: number
   }
@@ -118,24 +116,22 @@ type RateLimitDoc = {
 
 Usa **ventanas fijas**: si la ventana guardada no es la actual, el contador vuelve a 0. Leer, revisar y sumar ocurre dentro de una **transacción**, así dos preguntas simultáneas del mismo usuario no pueden pasar las dos el límite. Guarda solo contadores, sin el contenido de las preguntas.
 
-### `config/chat`
+### `config/chat` (contrato entre la app y el portal)
 
 ```ts
 type ChatConfig = {
-  enabled: boolean                 // interruptor de apagado
-  limits?: {                       // opcional: si falta, se usan los valores del código
-    perMinute?: number
-    perDay?: number
-    hourlyUsd?: number
-  }
+  enabled: boolean                        // interruptor
+  reserveUsd: number                      // 0–20, editable en el tablero /costos
+  disabledBy: "admin" | "reserve" | null  // quién lo apagó la última vez
   updatedAt: Timestamp
-  updatedBy: string                // correo del admin que lo cambió
 }
 ```
 
-Con `limits` en datos, los valores se pueden ajustar durante un ensayo sin volver a desplegar. Siguen siendo **pregunta abierta** (`docs/costos.md`). Si el documento no existe, el chat queda encendido y usa los límites del código.
-
-El servidor lo lee con un caché de unos 30 segundos, así apagar el chat tarda como máximo ese tiempo en hacer efecto.
+- **Lectura** (igual en `apps/mobile/lib/usage.ts` y `apps/admin/lib/costs.ts`): sin documento → encendido, reserva 10. Solo un `enabled: false` explícito apaga. Una reserva que no sea un número entre 0 y 20 vale 10. `disabledBy` desconocido vale `null`. Campos de más se ignoran.
+- **Quién escribe:** el tablero (admin) cambia `enabled` (con `disabledBy: "admin"` al apagar y `null` al encender) y `reserveUsd`. El endpoint **solo apaga**: si el saldo cruzaría la reserva escribe `{ enabled: false, disabledBy: "reserve" }` en una transacción, y solo si estaba encendido. Encender es siempre manual.
+- **Regla de la reserva:** se permite una llamada ⇔ `20 − gasto − peor caso (USD 0,000425) ≥ reserva`. El presupuesto de USD 20 es fijo en el código e informativo.
+- Los límites por usuario (5 por minuto, 20 por día, provisionales) son constantes del código (`USER_LIMITS`), no datos.
+- El servidor lee `config/chat` con un caché de 30 s: apagar desde el tablero tarda como máximo eso. Cuando el propio servidor apaga por reserva, su caché se invalida en el acto.
 
 ### Variables de entorno (proyecto de Vercel de la app, solo servidor)
 
@@ -143,11 +139,11 @@ El servidor lo lee con un caché de unos 30 segundos, así apagar el chat tarda 
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Key de la cuenta de Rol 5 | Nunca `NEXT_PUBLIC_` |
 | `FIREBASE_SERVICE_ACCOUNT` | JSON de la cuenta de servicio | Nunca `NEXT_PUBLIC_` |
-| `BUDGET_USD` | `20` | Presupuesto |
-| `RESERVE_USD` | `10` | Reserva para la demo; tope = 20 − 10 |
 | `CHAT_THINKING` | `disabled` (por defecto) o `low` | Pensamiento del modelo (RC-08) |
 
 `NEXT_PUBLIC_FIREBASE_PROJECT_ID` ya existe.
+
+El presupuesto (USD 20) es fijo en el código y la reserva vive en `config/chat`: no hay variables de entorno para eso.
 
 ## Borrador de reglas de Firestore (lo revisa y despliega Rol 4)
 
@@ -162,13 +158,9 @@ match /rate_limits/{userId} {
   allow read: if isAdmin();
   allow write: if false;
 }
-// Interruptor y límites del chat: los cambia un admin desde el portal.
-match /config/chat {
-  allow read, write: if isAdmin();
-}
 ```
 
-Opcional: validar en las reglas que `config/chat` solo tenga los campos esperados.
+Las reglas reales, con la validación del formato de `config/chat`, están en `/firestore.rules`. **Antes de desplegar:** si existe un `config/chat` viejo con `limits`, borrarlo (la validación `hasOnly` rechazaría cualquier escritura sobre él).
 
 ## Módulos nuevos (`apps/mobile/lib/`)
 
@@ -177,9 +169,10 @@ Sigue el patrón de Rol 2: la lógica va en funciones **puras** que se prueban c
 | Archivo | Qué hace | ¿Puro? |
 |---|---|---|
 | `pricing.ts` | Modelo, precios por millón de tokens, `costUsd(usage)`, `WORST_CASE_COST_USD` | Sí |
-| `usage.ts` | Tipos, claves de día y hora, `decideBudget(totals, hour, config)`, `decideRateLimit(doc, now, limits)`, contadores a sumar según el camino | Sí |
-| `usageStore.ts` | Interfaz `UsageStore` (leer totales y hora, transacción de límite, registrar uso, leer config) + versión **en memoria** para pruebas y desarrollo local | Sí |
+| `usage.ts` | Tipos, claves de día y hora, `parseChatConfig`, `decideReserve(gasto, reserva)`, `decideRateLimit(doc, now, limits)`, contadores a sumar según el camino | Sí |
+| `usageStore.ts` | Interfaz `UsageStore` (leer el gasto total, apagar el chat por reserva, transacción de límite, registrar uso, leer config) + versión **en memoria** para pruebas y desarrollo local | Sí |
 | `usageStoreFirestore.ts` | `UsageStore` con el Admin SDK | No (solo servidor) |
+| `globalLimit.ts` | `checkGlobalLimit`: interruptor + reserva; única pieza que conoce el saldo; apaga el interruptor de forma idempotente | No (usa el store) |
 | `offTopic.ts` | Filtro de pedidos fuera de tema | Sí |
 | `anthropic.ts` | La función `generate` (tipo `Generate` de `chatPipeline.ts`) con el SDK oficial | No (solo servidor) |
 | `serverAuth.ts` | Inicializa el Admin SDK y verifica el ID token | No (solo servidor) |
@@ -196,13 +189,13 @@ Regla general: **ante la duda, no se llama al modelo.** Fallar cerrado protege e
 |---|---|
 | Falta `ANTHROPIC_API_KEY` | Modo de prueba, que ya existe (`generate = null`). Se cuenta como `simulated`. |
 | Falta `FIREBASE_SERVICE_ACCOUNT` | **No se llama al modelo** (sin medidor no hay tope), se responde en modo de prueba y queda un aviso en el log. En local, `UsageStore` en memoria. |
-| Firestore no responde al revisar límites o tope | No se llama al modelo; `error` con mensaje claro. |
+| Firestore no responde al revisar el interruptor, la reserva o el límite por usuario | No se llama al modelo; `error` con mensaje claro. |
 | Falla al **registrar** el uso después de la llamada | La respuesta sale igual (ya se pagó). El log de Vercel guarda los tokens para corregir a mano. |
 | Anthropic responde error o `refusal` | `error` con mensaje claro; se registra lo que haya cobrado. |
 
-### Carrera en el tope total
+### Carrera en el borde de la reserva
 
-Revisar el tope y registrar el gasto no ocurren en la misma transacción. Hacerlo transaccional serializaría todo el chat. Si muchas preguntas pasan el chequeo al mismo tiempo, el exceso máximo es *preguntas simultáneas × USD 0,000425*: con 20 celulares a la vez, menos de USD 0,01. Por eso el chequeo usa `gasto + peor caso > tope` y no hace falta más precisión.
+Revisar la reserva y registrar el gasto no ocurren en la misma transacción. Si muchas preguntas pasan el chequeo a la vez, el exceso máximo es *preguntas simultáneas × USD 0,000425* (con 20 celulares a la vez, menos de USD 0,01). El apagado sí es transaccional: aunque varias preguntas crucen la reserva al mismo tiempo, se escribe una sola vez.
 
 ## Pruebas planeadas
 
@@ -210,9 +203,10 @@ Revisar el tope y registrar el gasto no ocurren en la misma transacción. Hacerl
 - `usage.test.ts`:
   - cambio de ventana de minuto y de día;
   - límite justo en el borde;
-  - tope con y sin margen;
-  - freno por hora;
+  - reserva con y sin margen, reserva 0 y 20;
   - qué contadores suma cada camino.
+- `globalLimit.test.ts`: interruptor, reserva, apagado idempotente, falla cerrada.
+- `apps/admin/lib/costs.test.ts`: lectura de documentos raros, dinero, ahorro, estado del chat, campo de la reserva.
 - `offTopic.test.ts`:
   - pedidos ajenos bloqueados;
   - **las preguntas de ejemplo y las 4 consultas del enunciado no se bloquean**.

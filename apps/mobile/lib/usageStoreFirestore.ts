@@ -1,5 +1,5 @@
 import type { App } from "firebase-admin/app"
-import { FieldValue, getFirestore, type DocumentSnapshot, type Firestore } from "firebase-admin/firestore"
+import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore"
 import {
   countersDelta,
   dayKey,
@@ -9,9 +9,8 @@ import {
   parseChatConfig,
   parseRateLimitState,
   type ChatConfig,
-  type ChatLimits,
-  type Spend,
   type UsageRecord,
+  type UserLimits,
 } from "./usage.ts"
 import type { UsageStore } from "./usageStore.ts"
 
@@ -22,13 +21,8 @@ import type { UsageStore } from "./usageStore.ts"
 //   rate_limits/{uid}   config/chat
 // ---------------------------------------------------------------------------
 
-const CONFIG_TTL_MS = 30_000 // apagar el chat tarda como máximo esto en hacer efecto
+const CONFIG_TTL_MS = 30_000 // apagar el chat desde el portal tarda como máximo esto
 let configCache: { value: ChatConfig; at: number } | null = null
-
-const spentOf = (s: DocumentSnapshot) => {
-  const v = s.exists ? s.get("spentUsd") : 0
-  return typeof v === "number" ? v : 0
-}
 
 export class FirestoreUsageStore implements UsageStore {
   db: Firestore
@@ -45,9 +39,27 @@ export class FirestoreUsageStore implements UsageStore {
     return value
   }
 
+  async getTotalSpend(): Promise<number> {
+    const snap = await this.db.doc("usage/totals").get()
+    const v = snap.exists ? snap.get("spentUsd") : 0
+    return typeof v === "number" && Number.isFinite(v) ? v : 0
+  }
+
+  // Transacción: solo escribe si el chat seguía encendido. Si dos preguntas
+  // cruzan la reserva a la vez, la segunda no cambia nada.
+  async disableChat(by: "reserve"): Promise<void> {
+    const ref = this.db.doc("config/chat")
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref)
+      if (!parseChatConfig(snap.exists ? snap.data() : null).enabled) return
+      tx.set(ref, { enabled: false, disabledBy: by, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    })
+    configCache = null // este servidor ve el apagado en el acto
+  }
+
   // Transacción: dos preguntas simultáneas del mismo usuario no pueden pasar
   // las dos el límite.
-  async consumeRateLimit(uid: string, now: Date, limits: ChatLimits): Promise<boolean> {
+  async consumeRateLimit(uid: string, now: Date, limits: UserLimits): Promise<boolean> {
     const ref = this.db.collection("rate_limits").doc(uid)
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref)
@@ -56,14 +68,6 @@ export class FirestoreUsageStore implements UsageStore {
       if (allowed) tx.set(ref, { ...next, updatedAt: FieldValue.serverTimestamp() })
       return allowed
     })
-  }
-
-  async getSpend(now: Date): Promise<Spend> {
-    const [totals, hour] = await this.db.getAll(
-      this.db.doc("usage/totals"),
-      this.db.doc(`usage/totals/hours/${hourKey(now)}`)
-    )
-    return { totalUsd: spentOf(totals), hourUsd: spentOf(hour) }
   }
 
   // Incrementos atómicos en los 3 documentos a la vez: varios celulares no se pisan.

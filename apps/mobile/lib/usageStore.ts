@@ -7,11 +7,10 @@ import {
   emptyCounters,
   hourKey,
   type ChatConfig,
-  type ChatLimits,
   type RateLimitState,
-  type Spend,
   type UsageCounters,
   type UsageRecord,
+  type UserLimits,
 } from "./usage.ts"
 
 // ---------------------------------------------------------------------------
@@ -21,13 +20,16 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface UsageStore {
-  // Interruptor y límites (documento config/chat).
+  // Interruptor y reserva (documento config/chat).
   getConfig(): Promise<ChatConfig>
+  // Gasto acumulado (usage/totals.spentUsd); 0 si todavía no hay.
+  getTotalSpend(): Promise<number>
+  // Apaga el chat por la reserva. Idempotente: solo escribe si estaba
+  // encendido, así dos preguntas a la vez no se pisan.
+  disableChat(by: "reserve"): Promise<void>
   // Revisa y, si se permite, suma una pregunta del usuario. Atómico: dos
   // preguntas simultáneas no pueden pasar las dos el límite.
-  consumeRateLimit(uid: string, now: Date, limits: ChatLimits): Promise<boolean>
-  // Gasto acumulado y de la hora actual, para el tope y el freno.
-  getSpend(now: Date): Promise<Spend>
+  consumeRateLimit(uid: string, now: Date, limits: UserLimits): Promise<boolean>
   // Suma una pregunta (con su camino y, si hubo modelo, sus tokens).
   record(rec: UsageRecord, now: Date): Promise<void>
 }
@@ -38,20 +40,27 @@ export class MemoryUsageStore implements UsageStore {
   days = new Map<string, UsageCounters>()
   hours = new Map<string, UsageCounters>()
   rateLimits = new Map<string, RateLimitState>()
+  disableWrites = 0 // cuántas veces disableChat cambió de verdad el estado
 
   async getConfig(): Promise<ChatConfig> {
     return this.config
   }
 
+  async getTotalSpend(): Promise<number> {
+    return this.totals.spentUsd
+  }
+
   // Sin `await` entre leer y escribir: en memoria esto ya es atómico.
-  async consumeRateLimit(uid: string, now: Date, limits: ChatLimits): Promise<boolean> {
+  async disableChat(by: "reserve"): Promise<void> {
+    if (!this.config.enabled) return
+    this.config = { ...this.config, enabled: false, disabledBy: by }
+    this.disableWrites++
+  }
+
+  async consumeRateLimit(uid: string, now: Date, limits: UserLimits): Promise<boolean> {
     const { allowed, next } = decideRateLimit(this.rateLimits.get(uid) ?? null, now, limits)
     if (allowed) this.rateLimits.set(uid, next)
     return allowed
-  }
-
-  async getSpend(now: Date): Promise<Spend> {
-    return { totalUsd: this.totals.spentUsd, hourUsd: this.hours.get(hourKey(now))?.spentUsd ?? 0 }
   }
 
   async record(rec: UsageRecord, now: Date): Promise<void> {

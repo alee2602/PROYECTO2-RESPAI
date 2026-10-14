@@ -18,7 +18,7 @@ Presentar **gasto, saldo, costo por función, medidas de ahorro y crédito reser
 | Proveedor | Anthropic, cuenta de Rol 5 con **USD 20** de crédito | Un solo dueño de la cuenta y de la clave (`docs/roles-equipo.md`, Rol 5). |
 | Modelo | **Claude Haiku 5.5** (`claude-haiku-5-5`) | El más barato de la familia actual. Precio: **USD 0,10 por millón de tokens de entrada, USD 0,50 por millón de salida** (precios oficiales para prompts de hasta 100.000 tokens). |
 | Presupuesto | USD 20 (valor fijo) | Saldo = presupuesto − gasto medido. |
-| Reserva para la demo | **USD 10** | El tope de desarrollo y pruebas es USD 20 − 10 = **USD 10**. |
+| Reserva para la demo | **USD 10** | Editable desde el tablero `/costos`. Si el saldo cruzaría la reserva, el chat se apaga solo; con la reserva en 10, desarrollo y pruebas pueden gastar hasta **USD 10**. En la demo se puede bajar a 0. |
 | Medidor | **Propio**, en Firestore, dentro del endpoint del chat | Ver abajo. |
 | Despliegue | Nada nuevo: el endpoint `POST /api/chat` de `apps/mobile` en Vercel, el mismo Firestore (plan Spark) y una página en el portal | `docs/medidor-gasto.md` |
 
@@ -65,11 +65,11 @@ El chat con modelo es **lo único que cuesta dinero** en todo el producto.
 
 Lee los contadores de Firestore (`usage/totals` y sus documentos por día y por hora) directamente con el SDK de cliente; las reglas solo dejan leer a los admins. Muestra:
 
-- **Gasto** acumulado, **saldo** (USD 20 − gasto), **reserva** (USD 10) y cuánto queda antes del tope.
+- **Gasto** acumulado, **saldo** (USD 20 − gasto, fijo), **reserva** editable (USD 10 por defecto) y lo disponible antes de la reserva. Si el saldo cruza la reserva, el chat se apaga solo y el tablero lo muestra.
 - **Costo por función** (tabla de arriba, con el chat medido).
 - **Medidas de ahorro:** preguntas resueltas sin modelo, fuera de tema, limitadas o bloqueadas, y el ahorro estimado (esas preguntas × costo promedio de una llamada real).
 - Gasto de hoy y de la última hora.
-- El **interruptor** para apagar el chat (`config/chat`).
+- El **interruptor** para apagar y encender el chat (`config/chat`). Encender es siempre manual. **Hecho (2026-10-13):** `apps/admin/app/costos/page.tsx`.
 
 ## Gasto fuera del endpoint (registro manual)
 
@@ -79,21 +79,20 @@ Lee los contadores de Firestore (`usage/totals` y sus documentos por día y por 
 
 ## Preguntas abiertas
 
-- **Valores de los límites.** Por decidir con el equipo, idealmente después de medir en un ensayo cuántas preguntas hace una persona en la demo. Se podrán ajustar sin desplegar (`config/chat.limits`):
+- **Valores de los límites.** Por decidir con el equipo, idealmente después de medir en un ensayo cuántas preguntas hace una persona en la demo. Hoy son constantes del código (`USER_LIMITS` en `apps/mobile/lib/usage.ts`):
   - ráfaga por usuario (preguntas por minuto);
   - total por usuario por día;
-  - freno global (USD por hora);
   - cuántas noticias trae la consulta a Firestore (propuesta: 50, RC-10).
 - Lista de palabras del filtro de pedidos fuera de tema (RC-14): se arma con el banco de pruebas, cuidando no bloquear preguntas legítimas.
 
 ## Orden de implementación
 
-1. Medidor + tope total (RC-19), con `UsageStore` en memoria y pruebas. No depende de nadie. **Hecho en código (2026-10-13).**
-2. Límites por usuario, freno por hora e interruptor (RC-17, RC-18, RC-20). **Hecho en código (2026-10-13).**
+1. Medidor + reserva con apagado automático (RC-19), con `UsageStore` en memoria y pruebas. No depende de nadie. **Hecho en código (2026-10-13).**
+2. Límites por usuario e interruptor (RC-17, RC-20). **Hecho en código (2026-10-13).** El freno por hora (RC-18) se descartó.
 3. Conectar Haiku 5.5 + banco de pruebas del pensamiento (RC-08), con Rol 2. **Parcial:** Haiku 5.5 conectado (`lib/anthropic.ts`, pensamiento desactivado); falta el banco de pruebas.
 
 Los pasos 1 a 3 falta probarlos en vivo: Rol 4 tiene que configurar Vercel y Firebase (`docs/medidor-gasto.md`, Tarea 10 de `docs/medidor_gasto_plan.md`).
-4. Tablero en el portal.
+4. Tablero en el portal. **Hecho en código (2026-10-13):** `/costos`, con interruptor y reserva editable.
 5. Filtro fuera de tema, contexto según la intención, consulta acotada y caché (RC-14, RC-09, RC-10, RC-11).
 
 ## Quién hace qué
@@ -101,6 +100,6 @@ Los pasos 1 a 3 falta probarlos en vivo: Rol 4 tiene que configurar Vercel y Fir
 | Quién | Qué |
 |---|---|
 | **Rol 5** | Código y pruebas en la rama `rol5/medidor`; API key de Anthropic; reglas propuestas en el PR. |
-| **Rol 4** (administra Firebase y Vercel) | Clave de la cuenta de servicio; desplegar las reglas; documento `admins/{correo}` de Rol 5; variables de entorno en Vercel (`docs/medidor-gasto.md`). |
+| **Rol 4** (administra Firebase y Vercel) | Clave de la cuenta de servicio; desplegar las reglas; documento `admins/{correo}` de Rol 5; `FIREBASE_SERVICE_ACCOUNT` y `ANTHROPIC_API_KEY` en Vercel (`docs/medidor-gasto.md`); borrar un `config/chat` viejo antes de desplegar las reglas. |
 | **Rol 2** | Revisar los cambios en `route.ts`, `chat.ts` (motivos nuevos) y `prompt.ts` (RC-09, RC-13). |
 | **Rol 3** | Revisar la página `/costos` del portal. |

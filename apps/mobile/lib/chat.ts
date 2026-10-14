@@ -53,7 +53,7 @@ export type NoAnswerReason =
   | "off_topic" // pedido ajeno a las noticias (Rol 5, RC-14)
   | "rate_limited" // el usuario pasó su límite de preguntas (Rol 5, RC-17)
   | "chat_disabled" // un admin apagó el chat desde el portal (Rol 5, RC-20)
-  | "budget_exhausted" // se alcanzó el tope de gasto o el freno por hora (Rol 5)
+  | "budget_exhausted" // el saldo llegó a la reserva y el chat se apagó solo (Rol 5)
   | "unauthenticated"
   | "error"
 

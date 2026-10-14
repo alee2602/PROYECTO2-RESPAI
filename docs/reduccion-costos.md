@@ -15,6 +15,8 @@ En todo el producto solo **una** función cuesta dinero: el chat cuando redacta 
 
 Estados: **Hecho**, **Por hacer** o **Descartado**.
 
+Los pendientes de Rol 5 sobre el prompt y el banco de pruebas (RC-08, RC-13, RC-14 y la declaración de capacidades del modelo) tienen su intención detallada en [`docs/rol5-pendientes.md`](rol5-pendientes.md).
+
 ## Resumen
 
 | ID | Técnica | Frente | Estado | Dueño |
@@ -36,9 +38,9 @@ Estados: **Hecho**, **Por hacer** o **Descartado**.
 | RC-15 | Solo usuarios con sesión | Abuso | Hecho | Rol 2 |
 | RC-16 | Pregunta de máximo 300 caracteres | Abuso | Hecho | Rol 2 |
 | RC-17 | Límite por usuario | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
-| RC-18 | Freno global por hora | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
-| RC-19 | Tope total con reserva para la demo | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
-| RC-20 | Interruptor de apagado | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
+| RC-18 | Freno global por hora | Abuso | Descartado | Rol 5 |
+| RC-19 | Reserva editable con apagado automático | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
+| RC-20 | Interruptor en el tablero | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
 | RC-21 | Infraestructura en niveles gratuitos | Infraestructura | Hecho | Todos |
 
 ## 1. Flujo: las preguntas legítimas usan lo mínimo
@@ -156,20 +158,18 @@ Estados: **Hecho**, **Por hacer** o **Descartado**.
 - **Ahorro:** un script o un bucle con una sola cuenta no puede vaciar el crédito.
 - **Valores:** pregunta abierta (`docs/costos.md`).
 
-### RC-18 · Freno global por hora — Hecho en código; falta probar en vivo
-- **Dónde:** `decideBudget` en `lib/usage.ts`, aplicado en `lib/meteredChat.ts`. Valor provisional: USD 1 por hora.
-- **Qué:** si el gasto de la hora actual pasa un monto, no se llama al modelo hasta la hora siguiente.
-- **Ahorro:** cubre lo que RC-17 no cubre: alguien que use muchas cuentas de Google.
-- **Valor:** pregunta abierta.
+### RC-18 · Freno global por hora — Descartado
+- **Decisión (2026-10-13):** lo único que frena el modelo son los límites por usuario, el interruptor y la reserva. Menos piezas y más fácil de explicar.
+- **Qué cubre en su lugar:** el abuso con muchas cuentas lo frena la reserva (el chat se apaga solo antes de tocarla) y, ante algo raro, el interruptor del tablero.
 
-### RC-19 · Tope total con reserva para la demo — Hecho en código; falta probar en vivo
-- **Qué:** si el gasto acumulado más el peor caso de una llamada supera USD 20 − USD 10 de reserva, no se llama al modelo y se responde `budget_exhausted` (un mensaje claro, no un error).
-- **Ahorro:** garantiza que queden USD 10 para la presentación.
-- **Dónde:** `decideBudget` en `lib/usage.ts` (compara contra el peor caso de `lib/pricing.ts`), con `BUDGET_USD` y `RESERVE_USD`. Diseño en `docs/medidor-gasto.md`.
+### RC-19 · Reserva editable con apagado automático — Hecho en código; falta probar en vivo
+- **Qué:** presupuesto fijo de USD 20 (informativo) y una reserva editable desde el tablero (USD 10 por defecto). Si el gasto más el peor caso de una llamada dejaría el saldo por debajo de la reserva, el endpoint apaga el interruptor (de forma idempotente) y responde `budget_exhausted`. Encenderlo es manual.
+- **Ahorro:** garantiza que quede la reserva para la presentación. En la demo se puede bajar a 0 para usarla.
+- **Prueba sin desplegar:** subir la reserva a 19,9999 desde el tablero y hacer una pregunta.
+- **Dónde:** `decideReserve` en `apps/mobile/lib/usage.ts`, `checkGlobalLimit` en `apps/mobile/lib/globalLimit.ts`, tablero en `apps/admin/app/costos/`.
 
-### RC-20 · Interruptor de apagado — Hecho en código; falta probar en vivo
-- **Dónde:** `config/chat.enabled`, leído en `lib/meteredChat.ts` (caché de 30 s en `lib/usageStoreFirestore.ts`). Falta el botón en el tablero del portal: hasta entonces se cambia a mano en Firebase Console.
-- **Qué:** un admin apaga el chat desde el tablero del portal (`config/chat.enabled`). El efecto tarda como máximo unos 30 segundos.
+### RC-20 · Interruptor en el tablero — Hecho en código; falta probar en vivo
+- **Qué:** un admin apaga o enciende el chat desde `/costos` (`config/chat.enabled`). El efecto tarda como máximo unos 30 segundos. El endpoint también lo apaga solo al cruzar la reserva (RC-19); encender es siempre manual.
 - **Ahorro:** respuesta inmediata ante cualquier gasto raro, sin esperar un despliegue.
 
 ## 4. Infraestructura

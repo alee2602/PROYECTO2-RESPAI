@@ -479,3 +479,18 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** nuevo `lib/safeLog.ts` (`safeError`), que de un error deja solo el tipo, el status HTTP y el código técnico, nunca el mensaje. Los 4 `console.error` del servidor lo usan. 7 pruebas nuevas (141 en total en `apps/mobile`), todas pasan, y `tsc` pasa. Lo que se guarda y lo que no está documentado en `docs/medidor-gasto.md` ("Qué se guarda y qué no").
 
 **Costo de la decisión:** los logs de error dicen menos para depurar (por ejemplo, `{ name: "Error", status: 429 }` en vez del mensaje de la API). Se acepta: para depurar alcanzan el tipo y el código.
+
+
+## 2026-10-13 — Costos: reserva editable y tablero `/costos` (Rol 5)
+
+**Se esperaba:** un tope fijo (USD 20 − USD 10 de reserva) leído de variables de entorno de Vercel, más un freno por hora, y un tablero de solo lectura con interruptor.
+
+**Qué cambió y por qué:**
+- Al diseñar el tablero se decidió que lo único que frena el modelo sean los límites por usuario, el interruptor y la reserva. El presupuesto de USD 20 queda fijo en el código, como dato informativo. El freno por hora (RC-18) se descartó.
+- Al revisar CLAUDE.md §4 ("un tope de gasto que lo apaga antes de agotar el saldo"), la reserva pasó a cumplir ese papel: es **editable** desde el tablero y, si el saldo la cruzaría, el endpoint **apaga el interruptor solo** (de forma idempotente). Encenderlo es manual.
+- Ventajas: se puede probar el tope sin desplegar (subir la reserva a 19,9999) y levantar la reserva en la demo (bajarla a 0).
+- Separación: `lib/globalLimit.ts` es la única pieza que conoce el saldo y la reserva; el resto del chat solo recibe "puede" o "no puede". App y portal no comparten código: el contrato de `config/chat` está en `docs/medidor-gasto.md`.
+
+**Qué pasó:** 161 pruebas en `apps/mobile` (antes 141: se reescribieron las del medidor y se sumaron las de `globalLimit`) y 48 en `apps/admin` (19 nuevas en `costs.test.ts`), todas pasan; `tsc` pasa en las dos. `next build` del portal compila y luego falla al prerenderizar solo por la falta de `.env.local`, como en ciclos anteriores. La barra del tablero usa una paleta validada para daltonismo en modo claro y oscuro (la primera idea, rojo y verde, no pasaba). Reglas de `config/chat` con validación de formato, para que las despliegue Rol 4.
+
+**Pendiente:** prueba en vivo (`docs/superpowers/specs/2026-10-13-tablero-costos-design.md` §8) cuando Rol 4 configure Vercel y despliegue las reglas.

@@ -1,5 +1,7 @@
 # Medidor de gasto y tope — plan de implementación
 
+> **Actualización 2026-10-13:** el tope con `BUDGET_USD`/`RESERVE_USD` y el freno por hora de este plan se reemplazaron por la reserva editable con apagado automático y el tablero `/costos` (plan `docs/superpowers/plans/2026-10-13-tablero-costos.md`). Lo que sigue es el registro de lo que se hizo en ese momento.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Objetivo:** que cada pregunta al chat quede medida (tokens, costo, camino) en Firestore y que el modelo nunca se llame si el chat está apagado, el usuario pasó su límite, se pasó el freno por hora o el gasto llegaría al tope de USD 10.
@@ -1737,14 +1739,12 @@ Mensaje sugerido: `docs(rol5): reglas propuestas, variables y estado del medidor
 
 **Antes:**
 - Rol 4 despliega las reglas.
-- Rol 4 carga en el proyecto de Vercel de la app: `FIREBASE_SERVICE_ACCOUNT`, `BUDGET_USD=20`, `RESERVE_USD=10` y `ANTHROPIC_API_KEY` (la key la entrega Rol 5 por un canal privado).
+- Rol 4 carga en el proyecto de Vercel de la app: `FIREBASE_SERVICE_ACCOUNT` y `ANTHROPIC_API_KEY` (la key la entrega Rol 5 por un canal privado).
 - Rol 4 crea `admins/{correo de Rol 5}`.
 
 - [ ] **Paso 1: Una pregunta real.** En el preview del PR, preguntar "Explícame la noticia de las elecciones en España". Esperado: etiqueta "Respuesta generada por IA". En Firebase Console aparece `usage/totals` con `questions.model = 1`, `inputTokens` y `outputTokens` reales y `spentUsd` de unos USD 0,0003. Captura: `docs/evidencia/medidor-primera-llamada.png`.
 - [ ] **Paso 2: Pregunta sin noticias.** "¿Qué pasó con el terremoto en Japón?". Esperado: `questions.no_model` sube y `spentUsd` no cambia.
-- [ ] **Paso 3: Límite por usuario.** Crear `config/chat` con `{ enabled: true, limits: { perMinute: 2 } }` y hacer 3 preguntas en el mismo minuto. Esperado: la tercera dice "Hiciste muchas preguntas seguidas…" y `rate_limits/{uid}` muestra `minuteCount: 2`.
-- [ ] **Paso 4: Interruptor.** Poner `enabled: false` y esperar 30 segundos. Esperado: "El chat está pausado por ahora…". Volver a `true`.
-- [ ] **Paso 5: Tope total.** En Vercel, poner temporalmente `RESERVE_USD=19.9999` (tope de USD 0,0001, menor que el peor caso) y volver a desplegar. Esperado: "El chat llegó a su límite de uso…", `questions.budget_blocked` sube y no aparece gasto nuevo en la Consola de Anthropic. **Volver a `RESERVE_USD=10`.**
+- [ ] **Pasos 3 a 5: Límite por usuario, interruptor y reserva.** Seguir la lista de pruebas manuales de `docs/superpowers/specs/2026-10-13-tablero-costos-design.md` §8, desde el tablero `/costos` (sin tocar Vercel).
 - [ ] **Paso 6: Conciliación.** Comparar `usage/totals.spentUsd` con la página Usage de la Consola de Anthropic. Captura: `docs/evidencia/medidor-conciliacion.png`. Anotar la diferencia y su causa (pruebas fuera del endpoint, redondeo) en `docs/ciclos.md` y en la tabla de gasto manual de `docs/costos.md`.
 - [ ] **Paso 7: Commit (lo hace el usuario)**
 

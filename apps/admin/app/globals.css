@@ -719,3 +719,144 @@ code {
   gap: 6px;
   padding: 14px;
 }
+/* Navegación del header */
+.admin-nav {
+  display: flex;
+  gap: 16px;
+  margin-right: auto;
+  margin-left: 16px;
+}
+
+.admin-nav a {
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-nav a:hover {
+  color: var(--ink);
+}
+
+/* Tablero de costos (Rol 5) */
+.chat-switch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chat-switch-head strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+
+.chat-switch.on strong {
+  color: var(--confirmed);
+}
+
+.chat-switch.off_admin strong,
+.chat-switch.off_reserve strong {
+  color: var(--error);
+}
+
+.warning {
+  color: var(--progress);
+}
+
+/* Colores de la barra: paleta categórica validada (skill dataviz,
+   validate_palette.js: pasa CVD en claro y oscuro). Orden fijo:
+   1 gastado, 2 disponible, 3 reserva. Los números van siempre en texto. */
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+  }
+}
+
+.money-bar {
+  display: flex;
+  gap: 2px; /* separación del color de la superficie entre tramos */
+  height: 14px;
+}
+
+.money-bar > span {
+  flex-basis: 0;
+  min-width: 4px;
+}
+
+.money-bar > span:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.money-bar > span:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.money-bar > span:only-child {
+  border-radius: 4px;
+}
+
+.money-bar-spent {
+  background: var(--series-1);
+}
+
+.money-bar-available {
+  background: var(--series-2);
+}
+
+.money-bar-reserve {
+  background: var(--series-3);
+}
+
+.money-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.reserve-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.paths-table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 420px;
+}
+
+.paths-table th,
+.paths-table td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.paths-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.paths-total th,
+.paths-total td {
+  font-weight: 700;
+}

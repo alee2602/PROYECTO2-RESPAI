@@ -56,9 +56,22 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Interruptor y límites del chat: los cambia un admin desde el portal.
+    // Interruptor y reserva del chat: los cambia un admin desde el tablero
+    // /costos. El endpoint solo lo apaga (Admin SDK, no pasa por acá).
+    // Se valida el formato para que un error del portal no deje un documento
+    // que confunda al endpoint. Contrato: docs/medidor-gasto.md.
     match /config/chat {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(["enabled", "reserveUsd", "disabledBy", "updatedAt"])
+        && (!("enabled" in request.resource.data) || request.resource.data.enabled is bool)
+        && (!("reserveUsd" in request.resource.data)
+            || (request.resource.data.reserveUsd is number
+                && request.resource.data.reserveUsd >= 0
+                && request.resource.data.reserveUsd <= 20))
+        && (!("disabledBy" in request.resource.data)
+            || request.resource.data.disabledBy == null
+            || request.resource.data.disabledBy in ["admin", "reserve"]);
     }
 
     // Todo lo demás, cerrado por defecto.

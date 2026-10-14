@@ -5,7 +5,7 @@ import { dayKey, hourKey } from "./usage.ts"
 import { MemoryUsageStore } from "./usageStore.ts"
 
 const NOW = new Date("2026-10-13T15:04:05Z")
-const LIMITS = { perMinute: 2, perDay: 40, hourlyUsd: 1 }
+const LIMITS = { perMinute: 2, perDay: 40 }
 const USAGE = { inputTokens: 900, outputTokens: 80 }
 
 test("record suma en totales, en el día y en la hora", async () => {
@@ -19,12 +19,34 @@ test("record suma en totales, en el día y en la hora", async () => {
   assert.equal(s.hours.get(hourKey(NOW))?.spentUsd, costUsd(USAGE))
 })
 
-test("getSpend: total y hora actual; otra hora empieza en 0", async () => {
+test("getTotalSpend: el gasto acumulado (0 al empezar)", async () => {
   const s = new MemoryUsageStore()
+  assert.equal(await s.getTotalSpend(), 0)
   await s.record({ path: "model", usage: USAGE }, NOW)
-  assert.deepEqual(await s.getSpend(NOW), { totalUsd: costUsd(USAGE), hourUsd: costUsd(USAGE) })
-  const nextHour = new Date("2026-10-13T16:00:00Z")
-  assert.deepEqual(await s.getSpend(nextHour), { totalUsd: costUsd(USAGE), hourUsd: 0 })
+  assert.equal(await s.getTotalSpend(), costUsd(USAGE))
+})
+
+test("disableChat: apaga por reserva y deja constancia", async () => {
+  const s = new MemoryUsageStore()
+  await s.disableChat("reserve")
+  assert.equal(s.config.enabled, false)
+  assert.equal(s.config.disabledBy, "reserve")
+  assert.equal(s.disableWrites, 1)
+})
+
+test("disableChat idempotente: 3 a la vez → una sola escritura real", async () => {
+  const s = new MemoryUsageStore()
+  await Promise.all([1, 2, 3].map(() => s.disableChat("reserve")))
+  assert.equal(s.disableWrites, 1)
+  assert.equal(s.config.enabled, false)
+})
+
+test("disableChat con el chat ya apagado por un admin: no cambia nada", async () => {
+  const s = new MemoryUsageStore()
+  s.config = { ...s.config, enabled: false, disabledBy: "admin" }
+  await s.disableChat("reserve")
+  assert.equal(s.disableWrites, 0)
+  assert.equal(s.config.disabledBy, "admin")
 })
 
 test("límite: preguntas simultáneas del mismo usuario → pasan exactamente las permitidas", async () => {

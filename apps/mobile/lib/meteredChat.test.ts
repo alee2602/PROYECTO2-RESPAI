@@ -44,13 +44,13 @@ function setup(overrides: Partial<Omit<MeteredDeps, "store">> = {}) {
     return { text: "Se adelantan las elecciones [1].", usage: USAGE }
   }
   let loads = 0
-  const deps: MeteredDeps = {
-    store, generate, budget: { budgetUsd: 20, reserveUsd: 10 }, now: NOW, today: "2026-10-13", ...overrides,
-  }
+  const deps: MeteredDeps = { store, generate, now: NOW, today: "2026-10-13", ...overrides }
   const ask = (question: string, uid = "u1") =>
     meteredAnswer(uid, { question, location: LOCATION }, async () => { loads++; return NEWS }, deps)
   return { store, calls, ask, loads: () => loads }
 }
+
+const reason = (r: { kind: string; reason?: string }) => (r.kind === "no_answer" ? r.reason : null)
 
 test("necesita modelo: lo llama una vez y registra tokens y costo reales", async () => {
   const { store, calls, ask } = setup()
@@ -76,67 +76,87 @@ test("sin noticias: no llama al modelo y cuenta como no_model (USD 0)", async ()
   assert.equal(store.totals.spentUsd, 0)
 })
 
-test("chat apagado: no lee noticias ni llama al modelo", async () => {
+test("apagado por un admin: chat_disabled, no lee noticias ni llama al modelo", async () => {
   const { store, calls, ask, loads } = setup()
-  store.config = { ...store.config, enabled: false }
+  store.config = { ...store.config, enabled: false, disabledBy: "admin" }
   const { response, trace } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "no_answer" && response.reason, "chat_disabled")
+  assert.equal(reason(response), "chat_disabled")
   assert.equal(trace.path, "disabled")
+  assert.equal(trace.reason, "admin")
   assert.equal(loads(), 0)
   assert.equal(calls.length, 0)
   assert.equal(store.totals.questions.disabled, 1)
 })
 
-test("límite por minuto: la pregunta extra no lee noticias ni llama al modelo", async () => {
+test("cruzar la reserva: budget_exhausted, apaga el chat, no lee noticias ni llama al modelo", async () => {
   const { store, calls, ask, loads } = setup()
-  store.config = { enabled: true, limits: { perMinute: 2, perDay: 40, hourlyUsd: 1 } }
-  await ask(NEEDS_MODEL)
-  await ask(NEEDS_MODEL)
-  const { response, trace } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "no_answer" && response.reason, "rate_limited")
-  assert.equal(trace.path, "rate_limited")
-  assert.equal(calls.length, 2)
-  assert.equal(loads(), 2)
-  assert.equal(store.totals.questions.rate_limited, 1)
-})
-
-test("tope total: gasto + peor caso > USD 10 → budget_exhausted sin llamar al modelo", async () => {
-  const { store, calls, ask } = setup()
   store.totals = { ...emptyCounters(), spentUsd: 10 - WORST_CASE_COST_USD / 2 }
   const { response, trace } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "no_answer" && response.reason, "budget_exhausted")
-  assert.equal(trace.path, "budget_blocked")
-  assert.equal(trace.reason, "total")
+  assert.equal(reason(response), "budget_exhausted")
+  assert.equal(trace.path, "disabled")
+  assert.equal(trace.reason, "reserve")
+  assert.equal(store.config.enabled, false)
+  assert.equal(store.config.disabledBy, "reserve")
+  assert.equal(loads(), 0)
   assert.equal(calls.length, 0)
 })
 
-test("tope total: con margen para una llamada más, sí llama al modelo", async () => {
+test("después de apagarse por reserva: la siguiente pregunta no vuelve a leer el gasto", async () => {
+  const { store, ask } = setup()
+  store.totals = { ...emptyCounters(), spentUsd: 10 }
+  await ask(NEEDS_MODEL)
+  let spendReads = 0
+  const original = store.getTotalSpend.bind(store)
+  store.getTotalSpend = async () => {
+    spendReads++
+    return original()
+  }
+  const { response } = await ask(NEEDS_MODEL)
+  assert.equal(reason(response), "budget_exhausted")
+  assert.equal(spendReads, 0)
+})
+
+test("un admin enciende con el saldo bajo la reserva: la siguiente pregunta lo vuelve a apagar", async () => {
+  const { store, calls, ask } = setup()
+  store.totals = { ...emptyCounters(), spentUsd: 10 }
+  await ask(NEEDS_MODEL)
+  store.config = { ...store.config, enabled: true, disabledBy: null } // encendido manual
+  const { response } = await ask(NEEDS_MODEL)
+  assert.equal(reason(response), "budget_exhausted")
+  assert.equal(store.config.enabled, false)
+  assert.equal(calls.length, 0)
+})
+
+test("con margen para una llamada más: sí llama al modelo", async () => {
   const { store, calls, ask } = setup()
   store.totals = { ...emptyCounters(), spentUsd: 10 - 2 * WORST_CASE_COST_USD }
   await ask(NEEDS_MODEL)
   assert.equal(calls.length, 1)
 })
 
-test("freno por hora: el gasto de la hora llegó al límite → budget_exhausted", async () => {
+test("reserva levantada a 0 en la demo: se usa el crédito reservado", async () => {
   const { store, calls, ask } = setup()
-  store.hours.set(hourKey(NOW), { ...emptyCounters(), spentUsd: 1 })
-  const { trace } = await ask(NEEDS_MODEL)
-  assert.equal(trace.path, "budget_blocked")
-  assert.equal(trace.reason, "hourly")
-  assert.equal(calls.length, 0)
+  store.totals = { ...emptyCounters(), spentUsd: 15 }
+  store.config = { ...store.config, reserveUsd: 0 }
+  await ask(NEEDS_MODEL)
+  assert.equal(calls.length, 1)
 })
 
-test("presupuesto mal configurado: modo de prueba, nunca llama al modelo", async () => {
-  const { calls, ask } = setup({ budget: null })
+test("límite por usuario (5 por minuto): la sexta no lee noticias ni llama al modelo", async () => {
+  const { store, calls, ask, loads } = setup()
+  for (let i = 0; i < 5; i++) await ask(NEEDS_MODEL)
   const { response, trace } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "answer" && response.generatedBy, "rules")
-  assert.equal(trace.path, "simulated")
-  assert.equal(calls.length, 0)
+  assert.equal(reason(response), "rate_limited")
+  assert.equal(trace.path, "rate_limited")
+  assert.equal(calls.length, 5)
+  assert.equal(loads(), 5)
+  assert.equal(store.totals.questions.rate_limited, 1)
 })
 
 test("sin API key: modo de prueba", async () => {
   const { store, ask } = setup({ generate: null })
-  const { trace } = await ask(NEEDS_MODEL)
+  const { response, trace } = await ask(NEEDS_MODEL)
+  assert.equal(response.kind === "answer" && response.generatedBy, "rules")
   assert.equal(trace.path, "simulated")
   assert.equal(store.totals.questions.simulated, 1)
 })
@@ -147,31 +167,44 @@ test("el modelo cobró pero no sirvió: mensaje claro y el costo igual se regist
   }
   const { store, ask } = setup({ generate: failing })
   const { response, trace } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "no_answer" && response.reason, "error")
+  assert.equal(reason(response), "error")
   assert.equal(trace.path, "error")
   assert.equal(store.totals.spentUsd, costUsd(USAGE))
   assert.equal(store.totals.questions.error, 1)
 })
 
-test("Firestore caído al leer la config: no lee noticias ni llama al modelo", async () => {
+test("Firestore caído al leer la config: error, no lee noticias ni llama al modelo", async () => {
   const { store, calls, ask, loads } = setup()
   store.getConfig = async () => {
     throw new Error("Firestore caído")
   }
-  const { response } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "no_answer" && response.reason, "error")
+  const { response, trace } = await ask(NEEDS_MODEL)
+  assert.equal(reason(response), "error")
+  assert.equal(trace.path, "error")
+  assert.equal(trace.reason, "store")
   assert.equal(loads(), 0)
   assert.equal(calls.length, 0)
 })
 
-test("Firestore caído al revisar el gasto: no llama al modelo", async () => {
+test("Firestore caído al leer el gasto: no llama al modelo", async () => {
   const { store, calls, ask } = setup()
-  store.getSpend = async () => {
+  store.getTotalSpend = async () => {
+    throw new Error("Firestore caído")
+  }
+  const { response } = await ask(NEEDS_MODEL)
+  assert.equal(reason(response), "error")
+  assert.equal(calls.length, 0)
+})
+
+test("Firestore caído en el límite por usuario: no llama al modelo", async () => {
+  const { store, calls, ask, loads } = setup()
+  store.consumeRateLimit = async () => {
     throw new Error("Firestore caído")
   }
   const { response, trace } = await ask(NEEDS_MODEL)
-  assert.equal(response.kind === "no_answer" && response.reason, "error")
-  assert.equal(trace.path, "error")
+  assert.equal(reason(response), "error")
+  assert.equal(trace.reason, "store")
+  assert.equal(loads(), 0)
   assert.equal(calls.length, 0)
 })
 
