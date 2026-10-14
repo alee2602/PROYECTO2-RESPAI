@@ -494,3 +494,21 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué pasó:** 161 pruebas en `apps/mobile` (antes 141: se reescribieron las del medidor y se sumaron las de `globalLimit`) y 48 en `apps/admin` (19 nuevas en `costs.test.ts`), todas pasan; `tsc` pasa en las dos. `next build` del portal compila y luego falla al prerenderizar solo por la falta de `.env.local`, como en ciclos anteriores. La barra del tablero usa una paleta validada para daltonismo en modo claro y oscuro (la primera idea, rojo y verde, no pasaba). Reglas de `config/chat` con validación de formato, para que las despliegue Rol 4.
 
 **Pendiente:** prueba en vivo (`docs/superpowers/specs/2026-10-13-tablero-costos-design.md` §8) cuando Rol 4 configure Vercel y despliegue las reglas.
+
+
+## 2026-10-14 — Pruebas en vivo del modelo del chat (Rol 5)
+
+**Se esperaba:** que con `ANTHROPIC_API_KEY` cargada el chat respondiera con Haiku 5.5. Las 161 pruebas pasaban, pero todas usan un modelo falso (sin red), así que nunca se había probado una llamada real.
+
+**Qué pasó:** la API key estaba mal generada y nada lo detectó: ninguna prueba hablaba con la API de verdad. Se regeneró la key.
+
+**Qué se cambió y por qué:** nuevo `apps/mobile/lib/anthropic.live.ts` y script `npm run test:live` (lee `.env` / `.env.local`). No termina en `.test.ts`, así que `npm test` no lo corre y no gasta. Sin key, las pruebas se saltan. Tres pruebas:
+- una key inválida da 401 (`AuthenticationError`), que no se cobra: es el síntoma del error original;
+- la key real responde con el modelo y los parámetros reales del chat (`claude-haiku-5-5`, pensamiento desactivado);
+- de punta a punta con `answerQuestion`: la pregunta llega al modelo real (`path: "model"`) y vuelve texto con tokens reales.
+
+No se revisa la redacción del modelo: por ahora solo importa probar que el chat sí llama al modelo. (Una primera versión también revisaba citas y la marca de "en desarrollo" con expresiones regulares; se quitó porque el modelo no es determinista y podía fallar sin un error real.)
+
+**Resultado:** 3/3 pasan con la key nueva, 2 llamadas pagadas, USD 0,000149 estimado (anotado en `docs/costos.md`). `npm test` sigue en 161/161, sin red.
+
+**Límite:** estas llamadas no pasan por el medidor de Firestore (no aparecen en `/costos`), ni por la ruta HTTP `/api/chat` (que además exige token de Firebase y cuenta de servicio).
