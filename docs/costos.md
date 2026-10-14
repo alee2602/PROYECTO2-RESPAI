@@ -75,7 +75,7 @@ Lee los contadores de Firestore (`usage/totals` y sus documentos por día y por 
 
 | Fecha | Quién | Qué | Gasto aprox. |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-10-14 | Rol 5 | Pruebas en vivo `npm run test:live` (`apps/mobile/lib/anthropic.live.ts`): 2 llamadas a Haiku 5.5 por corrida, no pasan por el medidor | USD 0,00015 por corrida |
 
 ## Preguntas abiertas
 
