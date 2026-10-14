@@ -50,7 +50,10 @@ export type NoAnswerReason =
   | "empty_question" // vacía o solo un saludo
   | "too_long" // protege el costo
   | "no_news" // ninguna noticia publicada responde a la pregunta
-  | "budget_exhausted" // se alcanzó el tope de gasto (Rol 5)
+  | "off_topic" // pedido ajeno a las noticias (Rol 5, RC-14)
+  | "rate_limited" // el usuario pasó su límite de preguntas (Rol 5, RC-17)
+  | "chat_disabled" // un admin apagó el chat desde el portal (Rol 5, RC-20)
+  | "budget_exhausted" // se alcanzó el tope de gasto o el freno por hora (Rol 5)
   | "unauthenticated"
   | "error"
 
@@ -164,9 +167,17 @@ export function answerWithoutModel(question: string, retrieval: RetrievalResult)
 }
 
 // Mensajes fijos para los casos que decide el endpoint (no la pregunta).
-export const NO_ANSWER_TEXT: Record<"budget_exhausted" | "unauthenticated" | "error", string> = {
+export const NO_ANSWER_TEXT: Record<
+  "budget_exhausted" | "rate_limited" | "chat_disabled" | "off_topic" | "unauthenticated" | "error",
+  string
+> = {
   budget_exhausted:
     "El chat llegó a su límite de uso por ahora, para no agotar el presupuesto del proyecto. Mientras tanto puedes leer todas las noticias en tu portada.",
+  rate_limited:
+    "Hiciste muchas preguntas seguidas. Espera un momento y vuelve a intentar; mientras tanto puedes leer tu portada.",
+  chat_disabled: "El chat está pausado por ahora. Puedes leer todas las noticias en tu portada.",
+  off_topic:
+    "Solo puedo responder sobre las noticias publicadas en la app. Prueba con una de las preguntas de ejemplo.",
   unauthenticated: "Tu sesión expiró. Vuelve a iniciar sesión para usar el chat.",
   error: "No pude responder en este momento. Intenta de nuevo en unos segundos.",
 }

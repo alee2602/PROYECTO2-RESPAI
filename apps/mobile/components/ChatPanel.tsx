@@ -170,7 +170,9 @@ function AssistantMessage({ id, response, onNavigate }: { id: number; response: 
     return (
       <div className="chat-msg chat-msg-bot chat-msg-noanswer">
         <p>{response.text}</p>
-        {response.reason === "budget_exhausted" && (
+        {(response.reason === "budget_exhausted" ||
+          response.reason === "rate_limited" ||
+          response.reason === "chat_disabled") && (
           <Link href="/feed" className="text-link" onClick={onNavigate}>
             Ir a la portada
           </Link>
