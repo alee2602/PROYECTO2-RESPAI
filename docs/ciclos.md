@@ -455,3 +455,27 @@ No cambia nada funcional, es un cambio de nombre para legibilidad del equipo. La
 **Qué se cambió y por qué:** el medidor es propio: el endpoint suma tokens reales y costo en Firestore con incrementos atómicos, y aplica tope total, límites por usuario y freno por hora. Para escribir esos contadores hace falta una cuenta de servicio de Firebase (si el usuario pudiera escribirlos con su token, podría borrar su límite). Reserva para la demo: USD 10 (se descartó USD 5 por quedarse corto). Saldo = USD 20 − gasto medido; se verifica contra la página Usage de la Consola en cada ensayo. Diseño completo en `docs/costos.md`.
 
 **Pendiente:** valores de los límites (pregunta abierta); revisión de las reglas con Rol 4; implementación en el orden de `docs/costos.md`.
+
+## 2026-10-13 — Costos: medidor de gasto en código (Rol 5)
+
+**Se esperaba:** implementar el diseño de `docs/medidor-gasto.md` siguiendo el plan `docs/medidor_gasto_plan.md` (Tareas 0 a 9): que cada pregunta al chat quede medida y que el modelo nunca se llame si el chat está apagado, el usuario pasó su límite, se pasó el freno por hora o el gasto llegaría al tope de USD 10.
+
+**Qué pasó:**
+- Lógica pura y probada sin red: `lib/pricing.ts` (precios de Haiku 5.5 y peor caso por llamada), `lib/usage.ts` (contadores, claves UTC, config, presupuesto, límite por usuario), `lib/usageStore.ts` (interfaz + versión en memoria) y `lib/meteredChat.ts` (orquestación que envuelve a `answerQuestion` de Rol 2 sin modificarla).
+- Conexiones reales: `lib/anthropic.ts` (SDK `@anthropic-ai/sdk` 0.133, sin herramientas, pensamiento desactivado por defecto), `lib/serverAuth.ts` y `lib/usageStoreFirestore.ts` (`firebase-admin` 14.5: transacción para el límite, incrementos atómicos para los totales).
+- Archivos de Rol 2 tocados (se avisa en el PR): `lib/chat.ts` (motivos `rate_limited`, `chat_disabled`, `off_topic`), `components/ChatPanel.tsx` (enlace a la portada en esos motivos) y `app/api/chat/route.ts` (conecta las piezas; sin `FIREBASE_SERVICE_ACCOUNT` se comporta exactamente como antes).
+- Reglas propuestas en `firestore.rules` (`usage`, `rate_limits`, `config/chat`), para que las revise y despliegue Rol 4.
+- Pruebas: de 86 a 134 en `apps/mobile`, todas pasan. `tsc` pasa. No hizo falta ajustar tipos del SDK: acepta `thinking: { type: "disabled" }` y `output_config: { effort: "low" }` tal como estaban en el plan.
+- `next build` compila, y después falla al prerenderizar `/` por la falta de `.env.local` (`auth/invalid-api-key` en `lib/firebase.ts`). Es lo mismo que en los ciclos de Rol 2 y no tiene que ver con este cambio.
+
+**Pendiente:** Rol 4 despliega las reglas, crea la cuenta de servicio y carga `FIREBASE_SERVICE_ACCOUNT`, `BUDGET_USD`, `RESERVE_USD` y `ANTHROPIC_API_KEY` en Vercel; prueba en vivo y conciliación con la Consola de Anthropic (Tarea 10 del plan); valores definitivos de los límites (provisionales: 5 por minuto, 20 por día, USD 1 por hora).
+
+## 2026-10-13 — Privacidad: logs del servidor sin contenido (Rol 5)
+
+**Se esperaba:** que el medidor y el endpoint solo registraran uso (tokens, costo, camino, límites) y nada del contenido de las conversaciones.
+
+**Qué pasó:** Firestore y la línea de log por pregunta ya cumplían la regla. Pero los `console.error` del servidor (`lib/meteredChat.ts` y `app/api/chat/route.ts`) escribían el objeto de error entero. Se escribió primero una prueba con un modelo falso que falla con un error que incluye el prompt, y la prueba **falló**: el log contenía la pregunta y las noticias del contexto. El riesgo era real, no teórico.
+
+**Qué se cambió y por qué:** nuevo `lib/safeLog.ts` (`safeError`), que de un error deja solo el tipo, el status HTTP y el código técnico, nunca el mensaje. Los 4 `console.error` del servidor lo usan. 7 pruebas nuevas (141 en total en `apps/mobile`), todas pasan, y `tsc` pasa. Lo que se guarda y lo que no está documentado en `docs/medidor-gasto.md` ("Qué se guarda y qué no").
+
+**Costo de la decisión:** los logs de error dicen menos para depurar (por ejemplo, `{ name: "Error", status: 429 }` en vez del mensaje de la API). Se acepta: para depurar alcanzan el tipo y el código.

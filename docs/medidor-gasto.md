@@ -41,6 +41,32 @@ Se mantiene el mismo método, la misma ruta, el mismo cuerpo `{ question, locati
 
 La pantalla (`ChatPanel.tsx`) ya muestra cualquier `no_answer` como mensaje claro, así que no necesita cambios. Opcional: mostrar el enlace a la portada también en estos casos.
 
+## Qué se guarda y qué no (privacidad)
+
+Regla: el medidor guarda **cuánto** se usa el chat, nunca **qué** se habla en él. Esos mismos números son los que ve el tablero de admin; no hay otra fuente de datos.
+
+### Lo que sí se guarda
+
+| Dónde | Qué | Para qué |
+|---|---|---|
+| `usage/totals`, `usage/totals/days/{día}`, `usage/totals/hours/{hora}` | `spentUsd`, `inputTokens`, `outputTokens`, `questions.{camino}` (contadores) y `updatedAt` | Tope total, freno por hora y tablero de costos. Son sumas globales: no dicen quién preguntó |
+| `rate_limits/{uid}` | `minute`, `minuteCount`, `day`, `dayCount`, `updatedAt` | Límite por usuario. El `uid` es solo el nombre del documento: sin él no se puede limitar a cada persona |
+| `config/chat` | `enabled`, `limits` | Interruptor y límites; lo escribe un admin desde el portal |
+| Logs de Vercel (una línea por pregunta, `route.ts`) | Camino (`path`), motivo (`reason`), cantidad de noticias citadas, tokens, costo, **largo** de la pregunta (`questionChars`) y duración (`ms`) | Evidencia de costos y depuración |
+
+### Lo que no se guarda en ningún lado
+
+- El texto de la pregunta.
+- El texto de la respuesta del modelo.
+- El prompt que se le manda al modelo (ni las noticias que se le pasaron como contexto).
+- La ubicación simulada del usuario.
+- El `uid` dentro de los totales o de los logs.
+- Un historial de la conversación: vive solo en la memoria de la pantalla y se borra al recargar la app (`ChatPanel.tsx`, Rol 2).
+
+**Errores en los logs:** del lado del servidor, un error nunca se escribe entero ni con su mensaje (texto libre que podría traer la pregunta, la respuesta o el prompt). Se pasa por `safeError` (`apps/mobile/lib/safeLog.ts`), que deja solo el tipo, el status HTTP y el código técnico. Pruebas: `lib/safeLog.test.ts` y las de "logs:" en `lib/meteredChat.test.ts`.
+
+**Cómo se mantiene:** cualquier campo nuevo en estos documentos o en el log del endpoint tiene que ser un número, una fecha o un código fijo (como `path` o `reason`), nunca texto libre que venga de la persona o del modelo. Si un cambio necesita romper esta regla, se discute con el equipo antes y se anota en `docs/ciclos.md`.
+
 ## Esquema de Firestore
 
 Todas las fechas se guardan en **UTC**. Las claves de día y de hora también van en UTC, y el tablero las muestra en hora local.
@@ -119,6 +145,7 @@ El servidor lo lee con un caché de unos 30 segundos, así apagar el chat tarda 
 | `FIREBASE_SERVICE_ACCOUNT` | JSON de la cuenta de servicio | Nunca `NEXT_PUBLIC_` |
 | `BUDGET_USD` | `20` | Presupuesto |
 | `RESERVE_USD` | `10` | Reserva para la demo; tope = 20 − 10 |
+| `CHAT_THINKING` | `disabled` (por defecto) o `low` | Pensamiento del modelo (RC-08) |
 
 `NEXT_PUBLIC_FIREBASE_PROJECT_ID` ya existe.
 

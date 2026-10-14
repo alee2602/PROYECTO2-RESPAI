@@ -26,7 +26,7 @@ Estados: **Hecho**, **Por hacer** o **Descartado**.
 | RC-05 | Contexto corto | Flujo | Hecho | Rol 2 |
 | RC-06 | Sin historial de conversación | Flujo | Hecho | Rol 2 |
 | RC-07 | Salida acotada | Flujo | Hecho | Rol 2 |
-| RC-08 | Pensamiento del modelo al mínimo | Flujo | Por hacer | Rol 5 + Rol 2 |
+| RC-08 | Pensamiento del modelo al mínimo | Flujo | Parcial | Rol 5 + Rol 2 |
 | RC-09 | Contexto según la intención | Flujo | Por hacer | Rol 5 + Rol 2 |
 | RC-10 | Consulta acotada a Firestore | Flujo | Por hacer | Rol 5 |
 | RC-11 | Caché de la lista de noticias | Flujo | Por hacer | Rol 5 |
@@ -35,10 +35,10 @@ Estados: **Hecho**, **Por hacer** o **Descartado**.
 | RC-14 | Filtro previo de pedidos fuera de tema | Propósito | Por hacer | Rol 5 |
 | RC-15 | Solo usuarios con sesión | Abuso | Hecho | Rol 2 |
 | RC-16 | Pregunta de máximo 300 caracteres | Abuso | Hecho | Rol 2 |
-| RC-17 | Límite por usuario | Abuso | Por hacer | Rol 5 |
-| RC-18 | Freno global por hora | Abuso | Por hacer | Rol 5 |
-| RC-19 | Tope total con reserva para la demo | Abuso | Por hacer | Rol 5 |
-| RC-20 | Interruptor de apagado | Abuso | Por hacer | Rol 5 |
+| RC-17 | Límite por usuario | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
+| RC-18 | Freno global por hora | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
+| RC-19 | Tope total con reserva para la demo | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
+| RC-20 | Interruptor de apagado | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
 | RC-21 | Infraestructura en niveles gratuitos | Infraestructura | Hecho | Todos |
 
 ## 1. Flujo: las preguntas legítimas usan lo mínimo
@@ -84,7 +84,8 @@ Estados: **Hecho**, **Por hacer** o **Descartado**.
 - **Ahorro:** la salida cuesta 5 veces más que la entrada en Haiku 5.5. Además, el tope hace que el peor caso por llamada sea conocido (USD 0,000425).
 - **Dónde:** `PROMPT_LIMITS.maxOutputTokens` y `SYSTEM_PROMPT` en `lib/prompt.ts`.
 
-### RC-08 · Pensamiento del modelo al mínimo — Por hacer
+### RC-08 · Pensamiento del modelo al mínimo — Parcial
+- **Hecho:** el pensamiento va desactivado por defecto (`lib/anthropic.ts`, variable `CHAT_THINKING`: `disabled` o `low`). **Falta:** el banco de pruebas de abajo, que necesita la API key.
 - **Qué:** Haiku 5.5 piensa por defecto con esfuerzo `medium`. Esos tokens se cobran como salida y salen del mismo `max_tokens`. Se usará desactivado o con esfuerzo `low`.
 - **Ahorro:** tokens de salida que no se ven. Además evita que el pensamiento consuma los 350 tokens y corte la respuesta.
 - **Riesgo:** razonar menos podría empeorar el manejo de contradicciones o de noticias no confirmadas. Se mitiga de dos formas:
@@ -149,22 +150,25 @@ Estados: **Hecho**, **Por hacer** o **Descartado**.
 - **Ahorro:** el tamaño de la entrada queda acotado aunque alguien pegue un texto largo.
 - **Dónde:** `CHAT_LIMITS` en `lib/chat.ts`, con el mismo límite en la caja de texto.
 
-### RC-17 · Límite por usuario — Por hacer
+### RC-17 · Límite por usuario — Hecho en código; falta probar en vivo
+- **Dónde:** `decideRateLimit` en `lib/usage.ts`; transacción en `lib/usageStoreFirestore.ts`. Valores provisionales: 5 por minuto y 20 por día.
 - **Qué:** preguntas por minuto (ráfaga) y por día para cada cuenta, contadas en Firestore (`rate_limits/{uid}`) dentro de una transacción.
 - **Ahorro:** un script o un bucle con una sola cuenta no puede vaciar el crédito.
 - **Valores:** pregunta abierta (`docs/costos.md`).
 
-### RC-18 · Freno global por hora — Por hacer
+### RC-18 · Freno global por hora — Hecho en código; falta probar en vivo
+- **Dónde:** `decideBudget` en `lib/usage.ts`, aplicado en `lib/meteredChat.ts`. Valor provisional: USD 1 por hora.
 - **Qué:** si el gasto de la hora actual pasa un monto, no se llama al modelo hasta la hora siguiente.
 - **Ahorro:** cubre lo que RC-17 no cubre: alguien que use muchas cuentas de Google.
 - **Valor:** pregunta abierta.
 
-### RC-19 · Tope total con reserva para la demo — Por hacer
+### RC-19 · Tope total con reserva para la demo — Hecho en código; falta probar en vivo
 - **Qué:** si el gasto acumulado más el peor caso de una llamada supera USD 20 − USD 10 de reserva, no se llama al modelo y se responde `budget_exhausted` (un mensaje claro, no un error).
 - **Ahorro:** garantiza que queden USD 10 para la presentación.
-- **Dónde:** `docs/medidor-gasto.md`.
+- **Dónde:** `decideBudget` en `lib/usage.ts` (compara contra el peor caso de `lib/pricing.ts`), con `BUDGET_USD` y `RESERVE_USD`. Diseño en `docs/medidor-gasto.md`.
 
-### RC-20 · Interruptor de apagado — Por hacer
+### RC-20 · Interruptor de apagado — Hecho en código; falta probar en vivo
+- **Dónde:** `config/chat.enabled`, leído en `lib/meteredChat.ts` (caché de 30 s en `lib/usageStoreFirestore.ts`). Falta el botón en el tablero del portal: hasta entonces se cambia a mano en Firebase Console.
 - **Qué:** un admin apaga el chat desde el tablero del portal (`config/chat.enabled`). El efecto tarda como máximo unos 30 segundos.
 - **Ahorro:** respuesta inmediata ante cualquier gasto raro, sin esperar un despliegue.
 

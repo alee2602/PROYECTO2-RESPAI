@@ -88,9 +88,11 @@ Lee los contadores de Firestore (`usage/totals` y sus documentos por día y por 
 
 ## Orden de implementación
 
-1. Medidor + tope total (RC-19), con `UsageStore` en memoria y pruebas. No depende de nadie.
-2. Límites por usuario, freno por hora e interruptor (RC-17, RC-18, RC-20).
-3. Conectar Haiku 5.5 + banco de pruebas del pensamiento (RC-08), con Rol 2.
+1. Medidor + tope total (RC-19), con `UsageStore` en memoria y pruebas. No depende de nadie. **Hecho en código (2026-10-13).**
+2. Límites por usuario, freno por hora e interruptor (RC-17, RC-18, RC-20). **Hecho en código (2026-10-13).**
+3. Conectar Haiku 5.5 + banco de pruebas del pensamiento (RC-08), con Rol 2. **Parcial:** Haiku 5.5 conectado (`lib/anthropic.ts`, pensamiento desactivado); falta el banco de pruebas.
+
+Los pasos 1 a 3 falta probarlos en vivo: Rol 4 tiene que configurar Vercel y Firebase (`docs/medidor-gasto.md`, Tarea 10 de `docs/medidor_gasto_plan.md`).
 4. Tablero en el portal.
 5. Filtro fuera de tema, contexto según la intención, consulta acotada y caché (RC-14, RC-09, RC-10, RC-11).
 
