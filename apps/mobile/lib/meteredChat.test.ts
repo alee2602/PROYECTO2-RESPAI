@@ -76,6 +76,18 @@ test("sin noticias: no llama al modelo y cuenta como no_model (USD 0)", async ()
   assert.equal(store.totals.spentUsd, 0)
 })
 
+test("fuera de tema: off_topic, no lee noticias ni llama al modelo, pero cuenta para el límite", async () => {
+  const { store, calls, ask, loads } = setup()
+  const { response, trace } = await ask("Escríbeme un poema sobre las elecciones en España")
+  assert.equal(reason(response), "off_topic")
+  assert.equal(trace.path, "off_topic")
+  assert.equal(loads(), 0)
+  assert.equal(calls.length, 0)
+  assert.equal(store.totals.questions.off_topic, 1)
+  assert.equal(store.totals.spentUsd, 0)
+  assert.equal(store.rateLimits.get("u1")?.minuteCount, 1)
+})
+
 test("apagado por un admin: chat_disabled, no lee noticias ni llama al modelo", async () => {
   const { store, calls, ask, loads } = setup()
   store.config = { ...store.config, enabled: false, disabledBy: "admin" }

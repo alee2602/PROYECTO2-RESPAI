@@ -2,6 +2,7 @@ import type { News } from "@respai/shared"
 import { NO_ANSWER_TEXT, type ChatRequest, type ChatResponse } from "./chat.ts"
 import { answerQuestion, type Generate, type ModelUsage } from "./chatPipeline.ts"
 import { checkGlobalLimit } from "./globalLimit.ts"
+import { isOffTopic } from "./offTopic.ts"
 import { costUsd } from "./pricing.ts"
 import { safeError } from "./safeLog.ts"
 import { PaidModelError, USER_LIMITS, type UsagePath } from "./usage.ts"
@@ -11,7 +12,8 @@ import type { UsageStore } from "./usageStore.ts"
 // El chat CON medidor de gasto (Rol 5). Envuelve a answerQuestion (Rol 2) sin
 // modificarla. Orden (docs/medidor-gasto.md):
 //   límite global (interruptor + reserva, lib/globalLimit.ts)
-//   → límite del usuario → noticias → (respuesta sin modelo) → modelo
+//   → límite del usuario → filtro fuera de tema (lib/offTopic.ts)
+//   → noticias → (respuesta sin modelo) → modelo
 //   → registrar uso.
 // Este módulo NO conoce el saldo ni la reserva: solo "puede" o "no puede".
 // Regla: ante la duda NO se llama al modelo (falla cerrada).
@@ -33,7 +35,7 @@ export type MeteredDeps = {
   today: string // YYYY-MM-DD, para el prompt
 }
 
-type EndpointReason = "chat_disabled" | "rate_limited" | "budget_exhausted" | "error"
+type EndpointReason = "chat_disabled" | "rate_limited" | "budget_exhausted" | "off_topic" | "error"
 
 function noAnswer(reason: EndpointReason): ChatResponse {
   return { kind: "no_answer", reason, text: NO_ANSWER_TEXT[reason] }
@@ -79,10 +81,13 @@ export async function meteredAnswer(
   }
   if (!allowed) return finish(noAnswer("rate_limited"), { path: "rate_limited", newsCount: 0 })
 
-  // 3. Noticias. Sus errores (p. ej. sesión vencida) los maneja el endpoint.
+  // 3. Filtro fuera de tema (RC-14, lib/offTopic.ts): $0, sin leer noticias.
+  if (isOffTopic(req.question)) return finish(noAnswer("off_topic"), { path: "off_topic", newsCount: 0 })
+
+  // 4. Noticias. Sus errores (p. ej. sesión vencida) los maneja el endpoint.
   const news = await loadNews()
 
-  // 4. Respuesta (con o sin modelo, lo decide answerQuestion).
+  // 5. Respuesta (con o sin modelo, lo decide answerQuestion).
   try {
     const { response, trace } = await answerQuestion(req, news, deps.today, deps.generate)
     return finish(response, {
