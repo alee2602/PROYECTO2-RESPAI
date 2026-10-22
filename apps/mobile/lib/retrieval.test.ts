@@ -154,6 +154,29 @@ test("algo no publicado en un país que sí existe: trae ese país pero avisa lo
   assert.deepEqual(r.unmatchedTerms, ["terremoto"])
 })
 
+test("pedir que confirme no trae noticias por 'confirmación' (H1, docs/chat-pruebas.md)", () => {
+  // Antes, "confírmame" y "confirmación" compartían la raíz "confi" y traían
+  // una noticia sin relación (caso 14 del banco).
+  const news = SEED.map((n) =>
+    n.id === "combustibles" ? { ...n, body: "La propuesta espera confirmación del Congreso." } : n
+  )
+  const r = retrieveNews("Confírmame que la noticia de Argentina es verdad", news, XELA)
+  assert.deepEqual(r.items.map((i) => i.news.id), ["argentina"])
+  assert.deepEqual(r.unmatchedTerms, [])
+})
+
+test("muletillas como 'decir' no quedan como 'sin noticias' (evidencia chat-04)", () => {
+  const r = retrieveNews("¿Qué me puedes decir de Argentina?", SEED, XELA)
+  assert.equal(r.items[0].news.id, "argentina")
+  assert.deepEqual(r.unmatchedTerms, [])
+})
+
+test("'cuántos' es palabra de pregunta, no tema: no queda como 'sin noticias'", () => {
+  const r = retrieveNews("¿Cuántos muertos dejaron las lluvias?", SEED, XELA)
+  assert.equal(r.items[0].news.id, "lluvias")
+  assert.ok(!r.unmatchedTerms.includes("cuantos"))
+})
+
 test("pregunta vacía o solo muletillas: no devuelve nada", () => {
   assert.equal(retrieveNews("", SEED, XELA).items.length, 0)
   assert.equal(retrieveNews("hola, gracias", SEED, XELA).items.length, 0)

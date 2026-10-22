@@ -3,16 +3,27 @@
 Qué falta para que el chat use el modelo de forma barata y dentro de su propósito. Antes de escribir código se deja escrita la **intención** de cada pieza, para que los demás roles puedan conectar el agente sabiendo qué se espera de él.
 
 - Lo que ya está hecho (medidor, tope, límites, interruptor, Haiku 5.5): `docs/medidor-gasto.md` y `docs/reduccion-costos.md`.
+- **Documentos de cierre del rol (2026-10-21):**
+  - `docs/requerimientos.md`: requerimientos, criterios con su estado y definición de Done;
+  - `docs/plan-pruebas.md`: automáticas, manuales y desinformación;
+  - `docs/transparencia.md`: las 5 preguntas y dónde se ve cada respuesta;
+  - `docs/guion-demo.md`.
+- **Lo que no se resuelve con código y queda para una persona:**
+  - pedir la confirmación por escrito del profesor sobre la PWA;
+  - pruebas en vivo P-08 a P-11 (`docs/plan-pruebas.md`);
+  - nivel 2 del banco;
+  - dos ensayos completos con varios celulares;
+  - revisión del saldo después del último ensayo.
 - El prompt y el flujo del chat son de Rol 2 (`apps/mobile/lib/prompt.ts`, `lib/chatPipeline.ts`). Todo lo que toque esos archivos se **propone** acá y se revisa con Rol 2; no se cambia en silencio.
 
 ## Prioridad
 
 | # | Pendiente | Técnica | Toca archivos de | Estado |
 |---|---|---|---|---|
-| 1 | Propósito cerrado en el prompt del sistema | RC-13 | Rol 2 (`prompt.ts`) | Intención escrita |
-| 2 | Filtro previo de pedidos fuera de tema | RC-14 | Rol 5 (`lib/offTopic.ts`, nuevo) | Intención escrita |
-| 3 | Declarar las capacidades del modelo y cuándo usar cada una | (nuevo) | Rol 2 (`prompt.ts`) | Intención escrita; diseño abierto |
-| 4 | Banco de pruebas del chat | RC-08 | Rol 5 (script nuevo) | Intención escrita |
+| 1 | Propósito cerrado en el prompt del sistema | RC-13 | Rol 2 (`prompt.ts`) | **Hecho (2026-10-21)**: regla 9; falta nivel 2 |
+| 2 | Filtro previo de pedidos fuera de tema | RC-14 | Rol 5 (`lib/offTopic.ts`) | **Hecho (2026-10-21)** |
+| 3 | Declarar las capacidades del modelo y cuándo usar cada una | (nuevo) | Rol 2 (`prompt.ts`) | Se decide con el nivel 2 del banco (ver abajo) |
+| 4 | Banco de pruebas del chat | RC-08 | Rol 2 + Rol 5 (`docs/chat-pruebas.md`) | Nivel 1 hecho (2026-10-14 y 2026-10-21); nivel 2 por correr |
 | 5 | Consulta acotada, caché de noticias, contexto según la intención | RC-10, RC-11, RC-09 | Rol 5 / Rol 2 | Baja prioridad por ahora |
 
 Los puntos 1 a 3 cambian lo que el modelo recibe. El banco de pruebas (4) es lo que dice si esos cambios funcionan, así que conviene armarlo junto con ellos y no al final.
@@ -155,8 +166,8 @@ Detalle de cada una en `docs/reduccion-costos.md`.
 
 ## Preguntas abiertas
 
-- Texto final de la regla 9 (con Rol 2).
-- Lista de palabras del filtro (se arma con el banco).
+- ~~Texto final de la regla 9 (con Rol 2).~~ Se usó la propuesta de este documento, sin cambios de fondo (2026-10-21).
+- ~~Lista de palabras del filtro (se arma con el banco).~~ Hecha: `lib/offTopic.ts`; ninguna pregunta legítima del banco se bloquea.
 - Ejemplos en el prompt: ninguno, uno o uno por tipo (se decide con el banco).
 - Si el "tipo de pregunta" se manda como línea en el mensaje o se usa solo para elegir el contexto.
-- Quién corre el banco con modelo y con qué key. La key de Anthropic es de Rol 5 y no se comparte en el repo.
+- ~~Quién corre el banco con modelo y con qué key.~~ Se corre **desde la app desplegada** (pasa por el medidor y queda en `/costos`), así nadie necesita la key en su máquina. Lo corren Rol 2 y Rol 5 juntos, en cuanto Vercel tenga las variables (`docs/chat-pruebas.md`, nivel 2).

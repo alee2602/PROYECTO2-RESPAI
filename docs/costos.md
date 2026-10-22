@@ -83,7 +83,7 @@ Lee los contadores de Firestore (`usage/totals` y sus documentos por día y por 
   - ráfaga por usuario (preguntas por minuto);
   - total por usuario por día;
   - cuántas noticias trae la consulta a Firestore (propuesta: 50, RC-10).
-- Lista de palabras del filtro de pedidos fuera de tema (RC-14): se arma con el banco de pruebas, cuidando no bloquear preguntas legítimas.
+- ~~Lista de palabras del filtro de pedidos fuera de tema (RC-14).~~ Hecha (2026-10-21, `apps/mobile/lib/offTopic.ts`), con el banco de pruebas: ninguna de las preguntas legítimas del banco se bloquea. Si en un ensayo bloquea algo legítimo, se ajusta la lista y se agrega el caso a `offTopic.test.ts`.
 
 ## Orden de implementación
 
@@ -93,7 +93,7 @@ Lee los contadores de Firestore (`usage/totals` y sus documentos por día y por 
 
 Los pasos 1 a 3 falta probarlos en vivo: Rol 4 tiene que configurar Vercel y Firebase (`docs/medidor-gasto.md`, Tarea 10 de `docs/medidor_gasto_plan.md`).
 4. Tablero en el portal. **Hecho en código (2026-10-13):** `/costos`, con interruptor y reserva editable.
-5. Filtro fuera de tema, contexto según la intención, consulta acotada y caché (RC-14, RC-09, RC-10, RC-11).
+5. Filtro fuera de tema (RC-14). **Hecho (2026-10-21).** Contexto según la intención, consulta acotada y caché (RC-09, RC-10, RC-11) quedan en baja prioridad: con ~12 noticias no ahorran dinero del modelo (`docs/rol5-pendientes.md`, punto 5).
 
 ## Quién hace qué
 
@@ -101,5 +101,5 @@ Los pasos 1 a 3 falta probarlos en vivo: Rol 4 tiene que configurar Vercel y Fir
 |---|---|
 | **Rol 5** | Código y pruebas en la rama `rol5/medidor`; API key de Anthropic; reglas propuestas en el PR. |
 | **Rol 4** (administra Firebase y Vercel) | Clave de la cuenta de servicio; desplegar las reglas; documento `admins/{correo}` de Rol 5; `FIREBASE_SERVICE_ACCOUNT` y `ANTHROPIC_API_KEY` en Vercel (`docs/medidor-gasto.md`); borrar un `config/chat` viejo antes de desplegar las reglas. |
-| **Rol 2** | Revisar los cambios en `route.ts`, `chat.ts` (motivos nuevos) y `prompt.ts` (RC-09, RC-13). |
+| **Rol 2** | Revisar los cambios en `route.ts`, `chat.ts` (motivos nuevos) y `prompt.ts` (RC-09, RC-13). **Revisado (2026-10-21)**; regla 9 (RC-13) agregada. |
 | **Rol 3** | Revisar la página `/costos` del portal. |

@@ -512,3 +512,44 @@ No se revisa la redacción del modelo: por ahora solo importa probar que el chat
 **Resultado:** 3/3 pasan con la key nueva, 2 llamadas pagadas, USD 0,000149 estimado (anotado en `docs/costos.md`). `npm test` sigue en 161/161, sin red.
 
 **Límite:** estas llamadas no pasan por el medidor de Firestore (no aparecen en `/costos`), ni por la ruta HTTP `/api/chat` (que además exige token de Firebase y cuenta de servicio).
+
+## 2026-10-14 — Chat, paso 7: banco de preguntas, nivel 1 sin modelo (Rol 2 con Rol 5)
+
+**Se esperaba:** que las 20 preguntas del banco (`docs/chat-pruebas.md`) tomaran el camino esperado y recuperaran las noticias correctas de las 12 semilla, sin gastar nada.
+
+**Qué pasó:** los 20 casos tomaron el camino esperado, pero aparecieron cuatro hallazgos:
+- **H1:** "confírmame" y "confirmación" comparten raíz, así que se traía una noticia sin relación.
+- **H2:** coincidencias débiles en el cuerpo meten ruido en el contexto.
+- **H3:** un pedido disfrazado ("escríbeme un poema sobre las elecciones") llega al modelo.
+- **H4:** "¿Qué pasó hoy?" no equilibra alcances.
+
+**Qué se decidió:** no cambiar nada sin evidencia del nivel 2, salvo lo que ya estaba planeado (H3 → regla 9 y filtro del Rol 5). H2 y el pensamiento del modelo se deciden con el nivel 2.
+
+## 2026-10-21 — Chat: filtro fuera de tema, regla 9 y ajustes de recuperación (Rol 2 + Rol 5)
+
+**Se esperaba:** cerrar H1 y H3 del nivel 1 y los puntos 1 y 2 de `docs/rol5-pendientes.md` (propósito cerrado y filtro previo), sin bloquear ninguna pregunta legítima.
+
+**Qué se hizo:**
+- **Filtro previo** `lib/offTopic.ts` (RC-14, $0): bloquea frases de inyección, pedidos de tarea escolar, y un verbo de producción en imperativo o infinitivo **seguido** de un formato ajeno ("escríbeme un poema"). Se engancha en `meteredAnswer` después del límite por usuario y antes de leer noticias. Principio: ante la duda, dejar pasar.
+- **Regla 9** en `SYSTEM_PROMPT` (RC-13), con la misma frase de rechazo que `NO_ANSWER_TEXT.off_topic`. Es la segunda barrera. El prompt del sistema sube a ~482 tokens estimados; el peor caso sigue bajo 2.500.
+- **H1:** "confirma(me)", "verdad", "cierto", "falso" pasan a palabras vacías: piden validar, no nombran un tema.
+
+**Qué pasó (nivel 1 repetido sobre las 12 semilla, por el camino real del endpoint, sin modelo):**
+- Los casos 15, 16 y 17 ahora terminan en `off_topic` ($0, sin leer Firestore).
+- El 14 recupera solo la noticia de Argentina (antes también traía el subsidio).
+- El 18 ("¿Qué escribió el presidente en su carta?") **no** se bloquea.
+
+**Hallazgo nuevo:** en el caso 13, "cuántos" quedaba como "palabra sin noticias" y la nota decía «No encontré noticias sobre "cuantos"». Se agregó "cuantos/cuantas/cuanta" a las palabras vacías. "dejaron" sigue igual: es ruido del tipo H2 y se decide con el nivel 2.
+
+**Pruebas:** 169 en `apps/mobile` (antes 161; 170 con la de H5, abajo), todas pasan; `tsc` pasa. Las nuevas son:
+- 4 del filtro, que comprueban que las preguntas de ejemplo, las del enunciado y casos "casi" como "¿Qué dice el nuevo código penal?" nunca se bloquean;
+- 1 del medidor (`off_topic` no lee noticias, no gasta y sí cuenta para el límite);
+- 1 del prompt (misma frase en la regla 9 y en el filtro);
+- 2 de la recuperación (H1 y "cuántos").
+
+**Lo que enseñaron las capturas con el modelo real (14 de octubre):**
+- **Caso 16, antes del arreglo** (`docs/evidencia/chat-09-ResponsibleAI.png`): el modelo dijo que no podía escribir un poema y **luego igual respondió** con la noticia. Las reglas 1 y 8 no alcanzaban. Esa evidencia justifica las dos barreras nuevas.
+- **H5** (`chat-04-incierto.png`): la nota decía «No encontré noticias sobre "decir"». Se agregaron "decir", "decirme", "contar" y "contarme" a las palabras vacías, con su prueba (170 pruebas en total).
+- Hay una noticia **PRUEBA4** publicada en Firestore que aparece en el chat (`chat-07b-region.png`); hay que borrarla antes de la demo.
+
+**Pendiente:** correr el nivel 2 completo desde la app desplegada (14 preguntas, ~USD 0,006) **después de desplegar este cambio**, y comprobar que la regla 9 no rechaza preguntas legítimas.

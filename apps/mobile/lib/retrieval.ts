@@ -42,18 +42,19 @@ export const RETRIEVAL = {
 // muletillas del chat ("dime", "resúmeme", "noticias"...). Sin tildes.
 const STOPWORDS = new Set(
   `a al algo algun alguna algunas alguno algunos ante antes aqui asi aun bien cada como con contra cual cuales
-  cuando cuanto de del desde donde dos e el ella ellas ellos en entre era es esa esas ese eso esos esta estan
+  cuando cuanto cuanta cuantos cuantas de del desde donde dos e el ella ellas ellos en entre era es esa esas ese eso esos esta estan
   estas este esto estos fue fueron ha han hasta hay la las le les lo los mas me mi mis mucho muy no nos o otra
   otras otro otros para pero poco por porque pues que quien quienes se sea segun ser si sido sin sobre son su
   sus tambien tan te tiene tienen toda todas todo todos tu tus un una unas uno unos y ya yo
-  dime decime cuentame cuenta contame explica explicame explicar resume resumeme resumir resumen resumenes
+  dime decime decir decirme cuentame cuenta contame contar contarme explica explicame explicar resume resumeme resumir resumen resumenes
   puedes podrias quiero quisiera saber sabe sabes paso pasa pasado pasando ocurrio ocurre sucedio sucede
   hubo hace hizo dice dijo dicen va van sera seria puede pueden tienes estado vez veces tal
   hablame habla informacion info noticia noticias nota notas novedad novedades dato datos tema temas
   hoy reciente recientes ultima ultimas ultimo ultimos ahora actual actuales nuevo nueva nuevos nuevas
   importante importantes principal principales relevante relevantes interesante
   region zona area pais ciudad local locales nacional nacionales internacional internacionales mundo
-  aqui alla cerca favor gracias hola buenas buenos dias tardes noches`.split(/\s+/).filter(Boolean)
+  aqui alla cerca favor gracias hola buenas buenos dias tardes noches
+  confirma confirmame confirmar confirmas confirmes verdad cierto cierta falso falsa`.split(/\s+/).filter(Boolean)
 )
 
 const SHORT_TERMS = new Set(["ia"])

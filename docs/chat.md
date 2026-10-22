@@ -1,6 +1,6 @@
 # Chat de noticias (Rol 2)
 
-Última actualización: 2026-10-12. Este documento crece con cada paso del chat.
+Última actualización: 2026-10-21. Este documento crece con cada paso del chat.
 
 ## Qué pide el enunciado
 
@@ -16,7 +16,10 @@ Las respuestas deben dejar ver sus fuentes y distinguir lo confirmado de lo inci
 ## Flujo planeado
 
 ```
-pregunta ─► recuperación SIN modelo ─► ¿hay noticias?
+pregunta ─► ¿fuera de tema? (lib/offTopic.ts) ─ sí ──► "Solo puedo responder sobre las noticias publicadas…" ($0)
+               │ no
+               ▼
+           recuperación SIN modelo ─► ¿hay noticias?
                 (lib/retrieval.ts)        │
                                           ├─ no ──► respuesta fija "no encontré / no puedo confirmarlo" ($0)
                                           └─ sí ──► modelo redacta con 3 a 5 noticias, cita fuentes y estados
@@ -30,8 +33,9 @@ pregunta ─► recuperación SIN modelo ─► ¿hay noticias?
 | 4. Prompt del sistema y armado del contexto | **Hecho** (`apps/mobile/lib/prompt.ts`) |
 | 5. Endpoint `app/api/chat/` (modo simulado, sin gastar) | **Hecho** (`apps/mobile/app/api/chat/route.ts`) — falta probarlo contra Firestore real desde la pantalla (paso 6) |
 | 6. Pantalla del chat | **Hecho** (`apps/mobile/components/ChatPanel.tsx`) — falta revisarla en el preview de Vercel |
-| 7. Banco de preguntas de prueba | Pendiente |
-| Conectar modelo real + medidor de gasto | **Hecho en código (Rol 5)**; falta probar en vivo (Tarea 10 del plan). Ver [`docs/medidor-gasto.md`](medidor-gasto.md) |
+| 7. Banco de preguntas de prueba | **Nivel 1 hecho** (`docs/chat-pruebas.md`); nivel 2 con modelo por correr |
+| Filtro fuera de tema + regla 9 del prompt (propósito cerrado) | **Hecho (2026-10-21)** (`apps/mobile/lib/offTopic.ts`, regla 9 en `lib/prompt.ts`) |
+| Conectar modelo real + medidor de gasto | **Hecho (Rol 5)**; el modelo responde en la app desplegada desde el 2026-10-14 (capturas `docs/evidencia/chat-*.png`). Ver [`docs/medidor-gasto.md`](medidor-gasto.md) |
 
 ## Paso 1 — Recuperación sin modelo
 

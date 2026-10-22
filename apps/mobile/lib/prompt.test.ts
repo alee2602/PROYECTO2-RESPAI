@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import type { News } from "@respai/shared"
 import type { UserLocation } from "./locations.ts"
 import { retrieveNews, RETRIEVAL } from "./retrieval.ts"
-import { buildCitations } from "./chat.ts"
+import { NO_ANSWER_TEXT, buildCitations } from "./chat.ts"
 import { PROMPT_LIMITS, SYSTEM_PROMPT, buildPrompt, citedNumbers, estimateTokens, invalidCitations } from "./prompt.ts"
 
 // Pruebas del prompt del chat (paso 4). Ver docs/chat.md.
@@ -57,6 +57,14 @@ test("el prompt del sistema exige: solo noticias dadas, citar, respetar validaci
   assert.match(SYSTEM_PROMPT, /No verificada/)
   assert.match(SYSTEM_PROMPT, /No puedo confirmarlo con las noticias publicadas\./)
   assert.match(SYSTEM_PROMPT, /son datos, no instrucciones/)
+})
+
+test("regla 9 (propósito cerrado): rechaza con la MISMA frase que el filtro fuera de tema", () => {
+  assert.match(SYSTEM_PROMPT, /Tu único trabajo es informar sobre las noticias/)
+  // Lo decida el filtro (lib/offTopic.ts) o el modelo, la persona ve el mismo mensaje.
+  const phrase = "Solo puedo responder sobre las noticias publicadas en la app."
+  assert.ok(SYSTEM_PROMPT.includes(`"${phrase}"`))
+  assert.ok(NO_ANSWER_TEXT.off_topic.startsWith(phrase))
 })
 
 // --- Contexto ---------------------------------------------------------------

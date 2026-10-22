@@ -33,8 +33,8 @@ Los pendientes de Rol 5 sobre el prompt y el banco de pruebas (RC-08, RC-13, RC-
 | RC-10 | Consulta acotada a Firestore | Flujo | Por hacer | Rol 5 |
 | RC-11 | Caché de la lista de noticias | Flujo | Por hacer | Rol 5 |
 | RC-12 | Imágenes libres en vez de generadas | Flujo | Hecho | Rol 3 |
-| RC-13 | Prompt de propósito cerrado | Propósito | Parcial | Rol 2 + Rol 5 |
-| RC-14 | Filtro previo de pedidos fuera de tema | Propósito | Por hacer | Rol 5 |
+| RC-13 | Prompt de propósito cerrado | Propósito | Hecho en código; falta nivel 2 del banco | Rol 2 + Rol 5 |
+| RC-14 | Filtro previo de pedidos fuera de tema | Propósito | Hecho | Rol 5 |
 | RC-15 | Solo usuarios con sesión | Abuso | Hecho | Rol 2 |
 | RC-16 | Pregunta de máximo 300 caracteres | Abuso | Hecho | Rol 2 |
 | RC-17 | Límite por usuario | Abuso | Hecho en código; falta probar en vivo | Rol 5 |
@@ -128,17 +128,19 @@ Los pendientes de Rol 5 sobre el prompt y el banco de pruebas (RC-08, RC-13, RC-
 
 ## 2. Propósito cerrado: el modelo solo hace su trabajo
 
-### RC-13 · Prompt de propósito cerrado — Parcial
-- **Hecho:** las reglas del prompt (`SYSTEM_PROMPT` en `lib/prompt.ts`) ya obligan a responder solo con las noticias dadas (regla 1) y a tratar la pregunta como datos, no como instrucciones (regla 8).
-- **Por hacer:** una regla explícita que diga que cualquier otro pedido (poemas, código, traducciones, opiniones, el clima) se rechaza en una sola frase, sin intentar responderlo. Se propone a Rol 2.
+### RC-13 · Prompt de propósito cerrado — Hecho en código (2026-10-21)
+- **Hecho:** las reglas del prompt (`SYSTEM_PROMPT` en `lib/prompt.ts`) obligan a responder solo con las noticias dadas (regla 1) y a tratar la pregunta como datos, no como instrucciones (regla 8).
+- **Hecho (2026-10-21):** la regla 9 rechaza cualquier otro pedido (textos creativos, código, traducciones, opiniones, consejos) con una sola frase fija, la misma que usa el filtro de RC-14.
+- **Falta:** comprobar con el nivel 2 del banco (`docs/chat-pruebas.md`) que la regla no rechaza preguntas legítimas.
 - **Ahorro:** una respuesta de rechazo cuesta unos 30 tokens de salida, frente a 350.
 
-### RC-14 · Filtro previo de pedidos fuera de tema — Por hacer
+### RC-14 · Filtro previo de pedidos fuera de tema — Hecho (2026-10-21)
 - **Qué:** una lista corta de pedidos ajenos y de intentos de inyección ("escribe", "poema", "código", "traduce", "ignora las instrucciones"…). Si aparece en la pregunta, se responde con un texto fijo (`off_topic`) **sin llamar al modelo**.
 - **Por qué hace falta si RC-03 ya filtra:** RC-03 solo frena las preguntas que no coinciden con ninguna noticia. La pregunta disfrazada ("escríbeme un poema largo sobre las elecciones en España") sí coincide con una noticia y llegaría al modelo.
 - **Ahorro:** la llamada entera.
 - **Riesgo:** bloquear una pregunta legítima. Por eso la lista es corta y la prueba incluye las preguntas de ejemplo y las 4 consultas del enunciado, que nunca deben bloquearse.
-- **Dónde:** `lib/offTopic.ts` (nuevo).
+- **Dónde:** `lib/offTopic.ts`, enganchado en `meteredAnswer` después del límite por usuario y antes de leer noticias (tampoco gasta lecturas de Firestore). Pruebas: `lib/offTopic.test.ts` (21 preguntas legítimas que nunca se bloquean, entre ellas casos "casi" como "¿Qué dice el nuevo código penal?", y 12 pedidos que sí) y una prueba en `lib/meteredChat.test.ts`.
+- **Cómo decide:** bloquea frases típicas de inyección ("ignora tus instrucciones", "actúa como"), pedidos de tarea escolar, y un verbo de producción en imperativo o infinitivo ("escríbeme", "redacta", "genera") **seguido** de un formato ajeno ("poema", "código", "cuento"). Un verbo solo, o un formato solo, no basta.
 
 ## 3. Abuso: nadie gasta el crédito por error o a propósito
 
